@@ -4,7 +4,7 @@
 
 AI Meterix is an open-source tool for teams running AI on their own GPUs, rented cloud GPUs and LLM APIs. It meters usage, prices it with *your* rates, tells you in plain language what to change, and forecasts next month with a range. Store the data in whatever you already use: SQLite, DuckDB, PostgreSQL, or your own connector.
 
-> **Status: planning.** Nothing is implemented in this repo yet. Read the plan in [docs/PLAN.md](docs/PLAN.md).
+> **Status: early development.** Phase 1 has started: the core data model and configuration loader exist; storage, collectors and interfaces do not yet. Read the plan in [docs/PLAN.md](docs/PLAN.md).
 
 ## What it will answer
 
@@ -27,9 +27,9 @@ AI Meterix is an open-source tool for teams running AI on their own GPUs, rented
 |---|---|
 | `docs/PLAN.md` | The phased plan and open decisions |
 | `docs/decisions/` | One short record per settled decision |
-| `src/ai_meterix/` | The package (empty until Phase 1) |
+| `src/ai_meterix/` | The package; `core/` holds the data model, config and plugin registry |
 | `tests/` | Unit, connector conformance and integration tests |
-| `examples/` | Showcase data and sample configs |
+| `examples/` | Sample config (`aimeterix.example.yaml`); showcase data later |
 | `deploy/` | Docker and docker-compose |
 
 ## Contributing
