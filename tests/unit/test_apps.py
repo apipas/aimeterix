@@ -284,3 +284,18 @@ def test_procargs_buffer_is_parsed_without_the_environment() -> None:
 def test_local_fetch_only_asks_this_machine() -> None:
     with pytest.raises(ValueError):
         local_fetch("http://example.com:11434/api/ps")
+
+
+def test_the_agent_itself_is_always_watched_and_kept() -> None:
+    r = FakeReaders()
+    r.cpu = {10: (100.0, 1), 99: (1.0, 9)}
+    tracker = AppTracker("m4", r, fetch=no_fetch, self_pid=99, top_n=0)  # type: ignore[arg-type]
+    ticker = Ticker(tracker)
+    ticker.tick()
+    ticker.tick(cpu_j=1.0, busy=1.0)  # second full scan
+    r.cpu = {10: (100.0, 1), 99: (1.001, 9)}
+    samples, _ = ticker.tick(cpu_j=1.0, busy=1.0)
+    assert r.usage_calls[-1] == [99]
+    me = samples["aimeterix agent"]
+    assert me.pid == 99
+    assert me.cpu_time_s == pytest.approx(0.001)  # tiny, but not added into "(other apps)"
