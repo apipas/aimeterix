@@ -10,6 +10,7 @@ import signal
 import sys
 import threading
 from collections.abc import Sequence
+from datetime import date, datetime, time, timedelta, timezone
 
 from ai_meterix import __version__
 
@@ -167,6 +168,134 @@ def _proxy(args: argparse.Namespace) -> int:
     return 0 if not recorder.last_error else 1
 
 
+def _day(text: str) -> date:
+    try:
+        return date.fromisoformat(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"not a date: {text!r} (use YYYY-MM-DD)") from None
+
+
+def _usage(args: argparse.Namespace) -> int:
+    from ai_meterix.core.config import load_config
+    from ai_meterix.core.errors import AiMeterixError
+    from ai_meterix.pricing.engine import CostEngine, local_zone
+
+    from .usage import render_csv, render_table
+
+    tz = local_zone()
+    now = datetime.now(timezone.utc)
+    if args.last:
+        start, end = now - timedelta(seconds=args.last), now
+    else:
+        first = args.since or (args.until or now.astimezone(tz).date())
+        last = args.until or first
+        if last < first:
+            print("aimeterix usage: --to is before --from", file=sys.stderr)
+            return 2
+        start = datetime.combine(first, time.min, tz).astimezone(timezone.utc)
+        end = datetime.combine(last + timedelta(days=1), time.min, tz).astimezone(timezone.utc)
+    try:
+        from ai_meterix.storage import open_reader
+
+        storage = open_reader(args.url or load_config(args.config).storage.url)
+    except AiMeterixError as exc:
+        print(f"aimeterix usage: {exc}", file=sys.stderr)
+        return 1
+    try:
+        statement = CostEngine(storage, tz).statement(start, min(end, now), now=now)
+    finally:
+        storage.close()
+    if args.csv:
+        text = render_csv(statement, by=args.by)
+        if args.csv == "-":
+            sys.stdout.write(text)
+        else:
+            with open(args.csv, "w", encoding="utf-8", newline="") as out:
+                out.write(text)
+            print(f"wrote {args.csv}")
+        return 0
+    print(render_table(statement, by=args.by))
+    return 0
+
+
+def _profile(args: argparse.Namespace) -> int:
+    import getpass
+    from decimal import Decimal, InvalidOperation
+
+    from ai_meterix.core.config import load_config
+    from ai_meterix.core.errors import AiMeterixError
+    from ai_meterix.core.model import CostProfile, FeeSpread
+    from ai_meterix.storage import open_reader, open_writer
+
+    url = args.url or load_config(args.config).storage.url
+    try:
+        storage = open_writer(url) if args.action == "set" else open_reader(url)
+    except AiMeterixError as exc:
+        print(f"aimeterix profile: {exc}", file=sys.stderr)
+        return 1
+    try:
+        hosts = [h.host.id for h in storage.get_hosts()]
+        host = args.host or (hosts[0] if len(hosts) == 1 else None)
+        if host is None:
+            known = ", ".join(hosts) or "none yet: run `aimeterix agent` first"
+            print(f"aimeterix profile: name the machine with --host ({known})", file=sys.stderr)
+            return 2
+        current = storage.get_profile(host)
+        if args.action == "set":
+            try:
+                changes = {
+                    name: Decimal(value)
+                    for name, value in (
+                        ("energy_rate_per_kwh", args.rate),
+                        ("pue", args.pue),
+                        ("fixed_fees_per_month", args.fees),
+                    )
+                    if value is not None
+                }
+            except InvalidOperation:
+                print("aimeterix profile: --rate, --pue and --fees take numbers", file=sys.stderr)
+                return 2
+            if current is None and "energy_rate_per_kwh" not in changes:
+                print("aimeterix profile: the first profile needs --rate", file=sys.stderr)
+                return 2
+            base = current or CostProfile(host, "default", "USD", Decimal(0))
+            profile = CostProfile(
+                host,
+                args.name or base.name,
+                args.currency or base.currency,
+                changes.get("energy_rate_per_kwh", base.energy_rate_per_kwh),
+                region=args.region if args.region is not None else base.region,
+                pue=changes.get("pue", base.pue),
+                fixed_fees_per_month=changes.get("fixed_fees_per_month", base.fixed_fees_per_month),
+                fee_spread=FeeSpread(args.spread) if args.spread else base.fee_spread,
+            )
+            current = storage.save_profile(profile, by=getpass.getuser())  # type: ignore[attr-defined]
+        history = storage.get_profile_history(host)
+    except AiMeterixError as exc:
+        print(f"aimeterix profile: {exc}", file=sys.stderr)
+        return 2
+    finally:
+        storage.close()
+    if current is None:
+        print(f"{host}: no cost profile yet; set one with `aimeterix profile set --rate 0.30`")
+        return 0
+    print(f"{host}: profile {current.name!r}, version {current.version}")
+    print(f"  energy   {current.energy_rate_per_kwh} {current.currency}/kWh x PUE {current.pue}")
+    print(
+        f"  fees     {current.fixed_fees_per_month} {current.currency}/month, "
+        f"spread by {current.fee_spread.value}"
+    )
+    print(f"  region   {current.region or '-'}")
+    if args.action == "history":
+        for p in history:
+            saved = f"{p.saved_at:%Y-%m-%d %H:%M} UTC" if p.saved_at else "-"
+            print(
+                f"  v{p.version}  {saved}  {p.energy_rate_per_kwh}/kWh  PUE {p.pue}  "
+                f"fees {p.fixed_fees_per_month}  {p.fee_spread.value}"
+            )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="aimeterix",
@@ -215,6 +344,37 @@ def build_parser() -> argparse.ArgumentParser:
     )
     proxy.add_argument("-v", "--verbose", action="store_true", help="log every call's counts")
     proxy.set_defaults(func=_proxy)
+
+    usage = commands.add_parser(
+        "usage", help="token counts, energy and cost per model and day (record 0012)"
+    )
+    usage.add_argument("--from", dest="since", type=_day, help="first local day (default today)")
+    usage.add_argument("--to", dest="until", type=_day, help="last local day, included")
+    usage.add_argument("--last", type=duration, help="instead of days: the last 24h, 90m, ...")
+    usage.add_argument(
+        "--by",
+        choices=("day", "model"),
+        default="day",
+        help="one row per model and day, or per model",
+    )
+    usage.add_argument("--csv", metavar="FILE", help="write CSV to FILE ('-' for the screen)")
+    usage.add_argument("--url", help="storage URL (default: from the config)")
+    usage.add_argument("--config", help="path to aimeterix.yaml")
+    usage.set_defaults(func=_usage)
+
+    profile = commands.add_parser("profile", help="show or set this machine's cost profile")
+    profile.add_argument("action", nargs="?", choices=("show", "set", "history"), default="show")
+    profile.add_argument("--rate", help="energy price per kWh, e.g. 0.30")
+    profile.add_argument("--currency", help="3-letter code, e.g. EUR (all prices use it)")
+    profile.add_argument("--pue", help="cooling and building overhead, 1.0 at home")
+    profile.add_argument("--fees", help="fixed running fees per month, e.g. 60")
+    profile.add_argument("--spread", choices=("calendar", "uptime"), help="how fees are spread")
+    profile.add_argument("--name", help="profile name, e.g. home-office")
+    profile.add_argument("--region", help="label only, e.g. CZ")
+    profile.add_argument("--host", help="machine id, when there is more than one")
+    profile.add_argument("--url", help="storage URL (default: from the config)")
+    profile.add_argument("--config", help="path to aimeterix.yaml")
+    profile.set_defaults(func=_profile)
     return parser
 
 
