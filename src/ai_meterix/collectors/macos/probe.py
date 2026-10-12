@@ -42,6 +42,9 @@ class MacReaders(Protocol):
     def energy(self, interval_s: float) -> dict[str, float]: ...
     def thermal_level(self) -> int: ...
     def processes(self) -> dict[str, Any]: ...
+    def gpu_stats(self) -> dict[str, float]: ...
+    def energy_delta(self) -> dict[str, float]: ...
+    def close(self) -> None: ...
 
 
 _KEYED = ("sysctl_str", "sysctl_int")
@@ -55,6 +58,8 @@ _CALLS = (
     "energy",
     "thermal_level",
     "processes",
+    "gpu_stats",
+    "energy_delta",
 )
 
 
@@ -147,6 +152,15 @@ class ReplayReaders:
 
     def processes(self) -> dict[str, Any]:
         return self._call("processes")  # type: ignore[no-any-return]
+
+    def gpu_stats(self) -> dict[str, float]:
+        return self._call("gpu_stats")  # type: ignore[no-any-return]
+
+    def energy_delta(self) -> dict[str, float]:
+        return self._call("energy_delta")  # type: ignore[no-any-return]
+
+    def close(self) -> None:
+        pass
 
 
 def _gb(value: float) -> str:
@@ -422,12 +436,17 @@ def probe_macos(
     interval_s: float = 0.25,
     hostname: str | None = None,
 ) -> ProbeReport:
+    owned = readers is None
     if readers is None:
         from .native import NativeReaders
 
         readers = NativeReaders()
     recording = RecordingReaders(readers)
     r: MacReaders = recording
-    info = platform_info(r, hostname or socket.gethostname())
-    checks = _checks(r, info, interval_s)
+    try:
+        info = platform_info(r, hostname or socket.gethostname())
+        checks = _checks(r, info, interval_s)
+    finally:
+        if owned:
+            readers.close()
     return ProbeReport(info, tuple(checks), readings=recording.readings)
