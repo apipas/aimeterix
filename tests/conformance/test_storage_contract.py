@@ -344,13 +344,24 @@ def test_hourly_rollups_match_raw_hourly_buckets(writer: StorageWriter) -> None:
     assert calls["latency_mean"] is None
 
 
-def test_rollup_picks_up_late_samples(writer: StorageWriter) -> None:
+def test_rollup_picks_up_late_samples_however_late(writer: StorageWriter) -> None:
     write_two_hours(writer)
     writer.rollup(T0 + 2 * HOUR)
-    writer.write_device_samples([DeviceSample(T0 + HOUR + timedelta(minutes=30), "mac:gpu", 60)])
-    writer.rollup(T0 + 2 * HOUR)
+    assert writer.rollup(T0 + 2 * HOUR) == 0  # nothing changed, nothing recomputed
+    # a sample for the first hour arrives 20 hours later (e.g. a buffered remote agent)
+    writer.write_device_samples([DeviceSample(T0 + timedelta(minutes=30), "mac:gpu", 60)])
+    writer.rollup(T0 + 20 * HOUR)
     rows = writer.query(q(Dataset.DEVICE_HOURLY, bucket=HOUR)).dicts()
-    assert [r["samples"] for r in rows] == [3, 4]
+    assert [r["samples"] for r in rows] == [4, 3]
+
+
+def test_late_sample_for_purged_hour_does_not_shrink_its_rollup(writer: StorageWriter) -> None:
+    write_two_hours(writer)
+    writer.retention(RetentionPolicy(raw_days=1, rollup_days=30), now=T0 + 2 * DAY)
+    before = writer.query(q(Dataset.DEVICE_HOURLY, bucket=HOUR)).dicts()
+    writer.write_device_samples([DeviceSample(T0 + timedelta(minutes=30), "mac:gpu", 60)])
+    writer.rollup(T0 + 2 * DAY)
+    assert writer.query(q(Dataset.DEVICE_HOURLY, bucket=HOUR)).dicts() == before
 
 
 def test_retention_keeps_rollups_after_raw_data_expires(writer: StorageWriter) -> None:
