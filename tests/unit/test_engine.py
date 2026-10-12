@@ -345,3 +345,18 @@ def test_profile_command(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> 
     assert main(["profile", "history", "--url", url]) == 0
     assert "v1" in capsys.readouterr().out
     assert main(["profile", "set", "--url", url, "--rate", "abc"]) == 2
+
+
+def test_usage_shows_watt_hours(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    from ai_meterix.interfaces.cli import main
+
+    build(tmp_path).close()
+    url = f"sqlite:///{tmp_path / 'meter.db'}"
+    assert main(["usage", "--url", url, "--from", "2026-10-05", "--by", "model"]) == 0
+    table = capsys.readouterr().out
+    assert " Wh " in table and "30.0" in table  # qwen: 0.03 kWh
+    assert main(["usage", "--url", url, "--from", "2026-10-05", "--by", "model", "--csv", "-"]) == 0
+    rows = capsys.readouterr().out.splitlines()
+    head = rows[0].split(",")
+    qwen = next(r.split(",") for r in rows if r.startswith("2026-10-05,qwen,"))
+    assert qwen[head.index("wh")] == "30.000" and qwen[head.index("kwh")] == "0.030"

@@ -1,7 +1,9 @@
 """The usage statement as a table or CSV (PLAN.md Phase 3 step 5).
 
 Columns follow provider usage pages: requests, input, output, cache read,
-cache write and total tokens per model, then kWh and cost. A count the
+cache write and total tokens per model, then energy and cost. Energy is shown
+in Wh, which reads better at desk scale; the CSV has both Wh and kWh, at full
+precision. Prices stay per kWh. A count the
 provider does not report is "-", never 0.
 """
 
@@ -13,7 +15,7 @@ from decimal import ROUND_HALF_UP, Decimal
 
 from ai_meterix.pricing.engine import ESTIMATE, PRICE_NOT_SET, TOKEN_FIELDS, Statement, UsageLine
 
-_HEAD = ("Requests", "Input", "Output", "Cache read", "Cache write", "Total", "kWh", "Cost")
+_HEAD = ("Requests", "Input", "Output", "Cache read", "Cache write", "Total", "Wh", "Cost")
 _MARKS = {PRICE_NOT_SET: "!", ESTIMATE: "~"}
 
 
@@ -47,7 +49,7 @@ def render_table(statement: Statement, by: str = "day") -> str:
                 f"{line.requests:,}" if line.requests else "",
                 *(_count(getattr(line, name)) for name in TOKEN_FIELDS),
                 _count(line.total_tokens),
-                _money(line.kwh, "0.001"),
+                _money(line.kwh * 1000, "0.1"),
                 _money(line.cost) + marks,
             )
         )
@@ -60,7 +62,7 @@ def render_table(statement: Statement, by: str = "day") -> str:
             f"{total.requests:,}",
             *(_count(getattr(total, name)) for name in TOKEN_FIELDS),
             _count(total.total_tokens),
-            _money(total.kwh, "0.001"),
+            _money(total.kwh * 1000, "0.1"),
             _money(total.cost),
         )
     )
@@ -115,6 +117,7 @@ def render_csv(statement: Statement, by: str = "day") -> str:
         "requests",
         *TOKEN_FIELDS,
         "total_tokens",
+        "wh",
         "kwh",
         "energy_cost",
         "fee_cost",
@@ -127,6 +130,7 @@ def render_csv(statement: Statement, by: str = "day") -> str:
     for line in _lines(statement, by):
         d = line.as_dict()
         d["currency"] = statement.currency or ""
+        d["wh"] = line.kwh * 1000
         d["notes"] = "; ".join(d["notes"])
         writer.writerow(["" if d[c] is None else d[c] for c in columns])
     return buffer.getvalue()
