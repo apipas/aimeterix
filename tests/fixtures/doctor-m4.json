@@ -1,0 +1,482 @@
+{
+ "note": "Readings recorded by `aimeterix doctor --json --readings` on an Apple M4 Max (64 GB), macOS 26.5.2, outside any sandbox. Energy channels and GPU clients are trimmed; no hostname or process names.",
+ "readings": {
+  "sysctl_int": {
+   "hw.nperflevels": 2,
+   "hw.perflevel0.logicalcpu": 12,
+   "hw.perflevel1.logicalcpu": 4,
+   "sysctl.proc_translated": 0,
+   "hw.ncpu": 16,
+   "hw.memsize": 68719476736,
+   "hw.pagesize": 16384,
+   "kern.memorystatus_vm_pressure_level": 1
+  },
+  "sysctl_str": {
+   "hw.perflevel0.name": "Performance",
+   "hw.perflevel1.name": "Efficiency",
+   "kern.osproductversion": "26.5.2",
+   "machdep.cpu.brand_string": "Apple M4 Max",
+   "hw.model": "Mac16,6"
+  },
+  "gpu": [
+   [
+    {
+     "model": "Apple M4 Max",
+     "cores": 40,
+     "stats": {
+      "In use system memory (driver)": 0,
+      "Alloc system memory": 48927653888,
+      "Tiler Utilization %": 9,
+      "recoveryCount": 0,
+      "lastRecoveryTime": 0,
+      "Renderer Utilization %": 13,
+      "TiledSceneBytes": 3866624,
+      "Device Utilization %": 13,
+      "SplitSceneCount": 0,
+      "Allocated PB Size": 200933376,
+      "In use system memory": 26417250304
+     }
+    }
+   ],
+   [
+    {
+     "model": "Apple M4 Max",
+     "cores": 40,
+     "stats": {
+      "In use system memory (driver)": 0,
+      "Alloc system memory": 48871866368,
+      "Tiler Utilization %": 0,
+      "recoveryCount": 0,
+      "lastRecoveryTime": 0,
+      "Renderer Utilization %": 0,
+      "TiledSceneBytes": 1998848,
+      "Device Utilization %": 0,
+      "SplitSceneCount": 0,
+      "Allocated PB Size": 200933376,
+      "In use system memory": 26189938688
+     }
+    }
+   ],
+   [
+    {
+     "model": "Apple M4 Max",
+     "cores": 40,
+     "stats": {
+      "In use system memory (driver)": 0,
+      "Alloc system memory": 48871866368,
+      "Tiler Utilization %": 0,
+      "recoveryCount": 0,
+      "lastRecoveryTime": 0,
+      "Renderer Utilization %": 0,
+      "TiledSceneBytes": 294912,
+      "Device Utilization %": 0,
+      "SplitSceneCount": 0,
+      "Allocated PB Size": 200933376,
+      "In use system memory": 26189938688
+     }
+    }
+   ]
+  ],
+  "cpu_ticks": [
+   [
+    [
+     12967648,
+     7616817,
+     105370279,
+     0
+    ],
+    [
+     10993548,
+     6543083,
+     108615107,
+     0
+    ],
+    [
+     7108046,
+     3553168,
+     115789302,
+     0
+    ],
+    [
+     5416618,
+     2300025,
+     118889094,
+     0
+    ],
+    [
+     430910,
+     62656,
+     126352732,
+     0
+    ],
+    [
+     339204,
+     46173,
+     126461708,
+     0
+    ],
+    [
+     177761,
+     29240,
+     126642117,
+     0
+    ],
+    [
+     119130,
+     22217,
+     126708810,
+     0
+    ],
+    [
+     94686,
+     18348,
+     126737833,
+     0
+    ],
+    [
+     83034,
+     16585,
+     126751468,
+     0
+    ],
+    [
+     2326753,
+     853921,
+     123574685,
+     0
+    ],
+    [
+     1849172,
+     657987,
+     124263602,
+     0
+    ],
+    [
+     1207399,
+     402818,
+     125183713,
+     0
+    ],
+    [
+     739507,
+     229049,
+     125844812,
+     0
+    ],
+    [
+     505090,
+     145108,
+     126176395,
+     0
+    ],
+    [
+     372155,
+     98491,
+     126364467,
+     0
+    ]
+   ],
+   [
+    [
+     12967654,
+     7616821,
+     105370295,
+     0
+    ],
+    [
+     10993552,
+     6543086,
+     108615126,
+     0
+    ],
+    [
+     7108050,
+     3553171,
+     115789321,
+     0
+    ],
+    [
+     5416620,
+     2300027,
+     118889115,
+     0
+    ],
+    [
+     430910,
+     62656,
+     126352757,
+     0
+    ],
+    [
+     339204,
+     46173,
+     126461733,
+     0
+    ],
+    [
+     177761,
+     29240,
+     126642142,
+     0
+    ],
+    [
+     119130,
+     22217,
+     126708835,
+     0
+    ],
+    [
+     94686,
+     18348,
+     126737858,
+     0
+    ],
+    [
+     83034,
+     16585,
+     126751493,
+     0
+    ],
+    [
+     2326755,
+     853922,
+     123574708,
+     0
+    ],
+    [
+     1849173,
+     657987,
+     124263626,
+     0
+    ],
+    [
+     1207400,
+     402818,
+     125183737,
+     0
+    ],
+    [
+     739507,
+     229049,
+     125844837,
+     0
+    ],
+    [
+     505090,
+     145108,
+     126176420,
+     0
+    ],
+    [
+     372155,
+     98491,
+     126364492,
+     0
+    ]
+   ]
+  ],
+  "cpu_layout": [
+   [
+    [
+     0,
+     "E"
+    ],
+    [
+     1,
+     "E"
+    ],
+    [
+     2,
+     "E"
+    ],
+    [
+     3,
+     "E"
+    ],
+    [
+     4,
+     "P"
+    ],
+    [
+     5,
+     "P"
+    ],
+    [
+     6,
+     "P"
+    ],
+    [
+     7,
+     "P"
+    ],
+    [
+     8,
+     "P"
+    ],
+    [
+     9,
+     "P"
+    ],
+    [
+     10,
+     "P"
+    ],
+    [
+     11,
+     "P"
+    ],
+    [
+     12,
+     "P"
+    ],
+    [
+     13,
+     "P"
+    ],
+    [
+     14,
+     "P"
+    ],
+    [
+     15,
+     "P"
+    ]
+   ]
+  ],
+  "energy": [
+   {
+    "EACC_CPU": 0.017,
+    "PACC0_CPU": 0.0,
+    "PACC1_CPU": 0.016,
+    "CPU Energy": 0.032,
+    "GPU": 0.018000000000000002,
+    "ANE": 0.0,
+    "DRAM": 0.052000000000000005,
+    "GPU Energy": 0.021701262000000002
+   }
+  ],
+  "vm_stats": [
+   {
+    "free_count": 59419,
+    "active_count": 817291,
+    "inactive_count": 1310279,
+    "wire_count": 1760765,
+    "zero_fill_count": 6424572787,
+    "reactivations": 17069687,
+    "pageins": 68060138,
+    "pageouts": 137250,
+    "faults": 2917007177,
+    "cow_faults": 38809593,
+    "lookups": 0,
+    "hits": 0,
+    "purges": 40743489,
+    "purgeable_count": 152137,
+    "speculative_count": 7030,
+    "decompressions": 10134615,
+    "compressions": 18298686,
+    "swapins": 2311491,
+    "swapouts": 2520657,
+    "compressor_page_count": 187790,
+    "throttled_count": 0,
+    "external_page_count": 515583,
+    "internal_page_count": 1619017,
+    "total_uncompressed_pages_in_compressor": 1024107
+   },
+   {
+    "free_count": 59419,
+    "active_count": 817291,
+    "inactive_count": 1310279,
+    "wire_count": 1760765,
+    "zero_fill_count": 6424572787,
+    "reactivations": 17069687,
+    "pageins": 68060138,
+    "pageouts": 137250,
+    "faults": 2917007177,
+    "cow_faults": 38809593,
+    "lookups": 0,
+    "hits": 0,
+    "purges": 40743489,
+    "purgeable_count": 152137,
+    "speculative_count": 7030,
+    "decompressions": 10134615,
+    "compressions": 18298686,
+    "swapins": 2311491,
+    "swapouts": 2520657,
+    "compressor_page_count": 187790,
+    "throttled_count": 0,
+    "external_page_count": 515583,
+    "internal_page_count": 1619017,
+    "total_uncompressed_pages_in_compressor": 1024107
+   }
+  ],
+  "swap": [
+   {
+    "total": 1073741824,
+    "available": 938409984,
+    "used": 135331840
+   }
+  ],
+  "thermal_level": [
+   0
+  ],
+  "processes": [
+   {
+    "listed": 872,
+    "readable": 551,
+    "own_cpu_s": 0.19276091666666664
+   }
+  ],
+  "gpu_clients": [
+   [
+    {
+     "pid": 189,
+     "gpu_ns": 0
+    },
+    {
+     "pid": 176,
+     "gpu_ns": 0
+    },
+    {
+     "pid": 176,
+     "gpu_ns": 20460240037375
+    },
+    {
+     "pid": 189,
+     "gpu_ns": 0
+    },
+    {
+     "pid": 82580,
+     "gpu_ns": 247613335625
+    },
+    {
+     "pid": 82800,
+     "gpu_ns": 181174708
+    },
+    {
+     "pid": 82796,
+     "gpu_ns": 30227250
+    },
+    {
+     "pid": 82793,
+     "gpu_ns": 0
+    },
+    {
+     "pid": 82826,
+     "gpu_ns": 0
+    },
+    {
+     "pid": 82841,
+     "gpu_ns": 0
+    },
+    {
+     "pid": 82849,
+     "gpu_ns": 274615041
+    },
+    {
+     "pid": 82851,
+     "gpu_ns": 0
+    }
+   ]
+  ]
+ }
+}
