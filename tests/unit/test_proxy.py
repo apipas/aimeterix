@@ -440,3 +440,35 @@ def test_proxy_overhead_is_small(setup: Setup) -> None:
     finally:
         upstream.shutdown()
     assert overhead < 0.005, f"{overhead * 1000:.1f} ms"
+
+
+def test_connections_to_the_provider_are_reused(setup: Setup) -> None:
+    for _ in range(3):
+        assert setup.request("/up/v1/chat/completions", {"model": "gpt-x"})[0] == 200
+    assert setup.proxy.upstreams.opened == 1
+    assert len(setup.calls()) == 3
+
+
+class _ClosesSilently(Provider):
+    """Drops each connection after answering, without saying so."""
+
+    def do_POST(self) -> None:
+        super().do_POST()
+        self.close_connection = True
+
+
+def test_a_connection_the_provider_closed_is_retried_once(tmp_path: Path) -> None:
+    upstream, url = _server(_ClosesSilently)
+    recorder = Recorder(lambda: open_writer(f"sqlite:///{tmp_path / 'm.db'}"), data_dir=tmp_path)
+    proxy = serve(Router({}, default=url), recorder, port=0)
+    threading.Thread(target=proxy.serve_forever, args=(0.05,), daemon=True).start()
+    setup = Setup(proxy, recorder, tmp_path / "m.db")
+    try:
+        for _ in range(3):
+            assert setup.request("/v1/chat/completions", {"model": "gpt-x"})[0] == 200
+        assert len(setup.calls()) == 3
+    finally:
+        proxy.shutdown()
+        proxy.server_close()
+        recorder.close()
+        upstream.shutdown()
