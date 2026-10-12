@@ -99,6 +99,7 @@ class AppleSiliconBackend:
         apps: bool = True,
         full_scan_s: float = 60.0,
         fetch: Fetch = local_fetch,
+        self_pid: int | None = None,
     ) -> None:
         if readers is None:
             from .native import NativeReaders
@@ -121,7 +122,9 @@ class AppleSiliconBackend:
         self._prev_ticks: list[list[int]] | None = None
         self._prev_t: float | None = None
         self.apps = (
-            AppTracker(self.host_id, readers, full_scan_s=full_scan_s, fetch=fetch)
+            AppTracker(
+                self.host_id, readers, full_scan_s=full_scan_s, fetch=fetch, self_pid=self_pid
+            )
             if apps
             else None
         )

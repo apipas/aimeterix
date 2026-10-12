@@ -16,7 +16,8 @@ Energy is **attributed**, never measured per app:
 - Neural Engine and DRAM energy are not split; macOS shows no per-app share.
 
 Apps with little use in an interval are added up into one ``(other apps)`` row
-so totals stay exact without a row per idle process.
+so totals stay exact without a row per idle process. The agent's own process
+is always kept, named ``aimeterix agent``, so its tracking cost is visible.
 """
 
 from __future__ import annotations
@@ -30,6 +31,7 @@ from ..runtimes import DetectedModel, Fetch, detect_models, local_fetch, runtime
 from .probe import MacReaders
 
 OTHER = "(other apps)"
+SELF = "aimeterix agent"
 
 
 @dataclass(frozen=True)
@@ -77,8 +79,10 @@ class AppTracker:
         top_n: int = 10,
         min_share: float = 0.005,
         fetch: Fetch = local_fetch,
+        self_pid: int | None = None,
     ) -> None:
         self.host_id = host_id
+        self.self_pid = self_pid
         self._r = readers
         self.full_scan_s = full_scan_s
         self.top_n = top_n
@@ -98,6 +102,8 @@ class AppTracker:
     # --- helpers ---------------------------------------------------------------
 
     def _name(self, pid: int, start: int) -> str:
+        if pid == self.self_pid:
+            return SELF
         key = (pid, start)
         if key not in self._names:
             try:
@@ -162,7 +168,10 @@ class AppTracker:
 
         full_mark = self._full_mark
         full = first or t >= self._full_due
-        watch = None if full else sorted(set(gpu_delta) | set(self._top) | self._runtime_pids)
+        always = {self.self_pid} if self.self_pid is not None else set()
+        watch = (
+            None if full else sorted(set(gpu_delta) | set(self._top) | self._runtime_pids | always)
+        )
         try:
             usage = self._r.process_usage(watch)
         except Exception as exc:
@@ -240,7 +249,7 @@ class AppTracker:
             row = rows[pid]
             row.model_id = self._model_of.get(pid)
             small = (row.cpu_s or 0.0) < self.min_share * row.interval_s and not row.gpu_s
-            if small and row.model_id is None:
+            if small and row.model_id is None and pid != self.self_pid:
                 if not row.cpu_s:
                     continue
                 if other is None:
