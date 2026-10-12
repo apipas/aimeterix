@@ -27,6 +27,9 @@ dependencies = [
     "pyyaml>=6.0",
 ]
 
+[project.scripts]
+aimeterix = "ai_meterix.interfaces.cli:main"
+
 [project.optional-dependencies]
 postgres = ["psycopg[binary]>=3.1"]
 duckdb = ["duckdb>=1.0"]
