@@ -4,7 +4,17 @@
 
 AI Meterix is an open-source tool for teams running AI on their own GPUs, rented cloud GPUs and LLM APIs. It meters usage, prices it with *your* rates, tells you in plain language what to change, and forecasts next month with a range. Store the data in whatever you already use: SQLite, DuckDB, PostgreSQL, or your own connector.
 
-> **Status: early development.** Phase 1 is in progress: the core data model, configuration loader, storage interface and the SQLite (default), PostgreSQL and DuckDB connectors exist, plus an import for the prototype's data; collectors and interfaces do not yet. Read the plan in [docs/PLAN.md](docs/PLAN.md).
+> **Status: early development.** Phases 1 and 2 are in progress: the data model, storage connectors (SQLite default, PostgreSQL, DuckDB), `aimeterix doctor`, the Apple Silicon agent and the LLM proxy exist. Costs, reports and the dashboard come next. Read the plan in [docs/PLAN.md](docs/PLAN.md).
+
+## Try it
+
+```bash
+aimeterix doctor                 # what this machine can measure
+aimeterix agent                  # sample the hardware until Ctrl-C (--mock for a demo)
+aimeterix proxy --upstream http://127.0.0.1:8080   # meter a local llama.cpp server
+```
+
+Point your app at the proxy instead of the provider: `http://127.0.0.1:8787/openai/v1`, `http://127.0.0.1:8787/anthropic` or, with `--upstream`, `http://127.0.0.1:8787/v1`. Add `X-AIMeterix-App` and `X-AIMeterix-Feature` headers (or `/app/<name>/` in the path) to see who made each call. Only token counts, timings and tags are stored, never prompts, responses or keys.
 
 ## What it will answer
 
