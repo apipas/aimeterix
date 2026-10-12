@@ -8,6 +8,7 @@ points (see ``ai_meterix.core.plugins``).
 from __future__ import annotations
 
 from collections.abc import Callable
+from importlib import import_module
 from typing import Any
 
 from ai_meterix.core.errors import PluginError
@@ -43,10 +44,16 @@ __all__ = [
 ]
 
 storage_connectors.register("sqlite", SQLiteStorage)
+storage_connectors.register("postgresql", "ai_meterix.storage.postgres:PostgresStorage")
+storage_connectors.register("postgres", "ai_meterix.storage.postgres:PostgresStorage")
+storage_connectors.register("duckdb", "ai_meterix.storage.duckdb:DuckDBStorage")
 
 
 def _factory(url: str) -> Callable[..., Any]:
     factory = storage_connectors.get(scheme_of(url))
+    if isinstance(factory, str):  # built-in connector imported on first use
+        module, _, attr = factory.partition(":")
+        factory = getattr(import_module(module), attr)
     if not callable(factory):
         raise PluginError(f"storage plugin for {scheme_of(url)!r} is not callable")
     return factory

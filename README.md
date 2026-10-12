@@ -4,7 +4,7 @@
 
 AI Meterix is an open-source tool for teams running AI on their own GPUs, rented cloud GPUs and LLM APIs. It meters usage, prices it with *your* rates, tells you in plain language what to change, and forecasts next month with a range. Store the data in whatever you already use: SQLite, DuckDB, PostgreSQL, or your own connector.
 
-> **Status: early development.** Phase 1 is in progress: the core data model, configuration loader, storage interface and the default SQLite connector exist; Postgres and DuckDB connectors, collectors and interfaces do not yet. Read the plan in [docs/PLAN.md](docs/PLAN.md).
+> **Status: early development.** Phase 1 is in progress: the core data model, configuration loader, storage interface and the SQLite (default), PostgreSQL and DuckDB connectors exist, plus an import for the prototype's data; collectors and interfaces do not yet. Read the plan in [docs/PLAN.md](docs/PLAN.md).
 
 ## What it will answer
 

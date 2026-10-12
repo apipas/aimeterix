@@ -24,7 +24,7 @@ class _Spec:
 
 
 _DEVICE_DIMS = {"device_id": "f.device_id", "host_id": "d.host_id", "kind": "d.kind"}
-_MEMORY_DIMS = {"pool_id": "f.pool_id", "host_id": "p.host_id", "pool_type": "p.type"}
+_MEMORY_DIMS = {"pool_id": "f.pool_id", "host_id": "p.host_id", "pool_type": "p.pool_type"}
 _PROCESS_DIMS = {
     "host_id": "f.host_id",
     "process_name": "f.process_name",
