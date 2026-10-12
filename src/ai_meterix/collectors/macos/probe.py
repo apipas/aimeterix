@@ -44,10 +44,13 @@ class MacReaders(Protocol):
     def processes(self) -> dict[str, Any]: ...
     def gpu_stats(self) -> dict[str, float]: ...
     def energy_delta(self) -> dict[str, float]: ...
+    def process_usage(self, pids: list[int] | None = None) -> list[list[Any]]: ...
+    def process_name(self, pid: int) -> str | None: ...
+    def process_args(self, pid: int) -> list[str] | None: ...
     def close(self) -> None: ...
 
 
-_KEYED = ("sysctl_str", "sysctl_int")
+_KEYED = ("sysctl_str", "sysctl_int", "process_name", "process_args")
 _CALLS = (
     "swap",
     "cpu_ticks",
@@ -60,6 +63,7 @@ _CALLS = (
     "processes",
     "gpu_stats",
     "energy_delta",
+    "process_usage",
 )
 
 
@@ -83,7 +87,7 @@ class RecordingReaders:
                 entry = {"error": str(exc) or type(exc).__name__}
                 result = exc
             if name in _KEYED:
-                self.readings.setdefault(name, {})[args[0]] = entry
+                self.readings.setdefault(name, {})[str(args[0])] = entry
             else:
                 self.readings.setdefault(name, []).append(entry)
             if isinstance(result, Exception):
@@ -101,8 +105,8 @@ class ReplayReaders:
         self._readings = readings
         self._next: dict[str, int] = {}
 
-    def _keyed(self, kind: str, name: str) -> Any:
-        return self._unwrap(self._readings.get(kind, {}).get(name))
+    def _keyed(self, kind: str, name: object) -> Any:
+        return self._unwrap(self._readings.get(kind, {}).get(str(name)))
 
     def _call(self, kind: str) -> Any:
         results = self._readings.get(kind)
@@ -158,6 +162,18 @@ class ReplayReaders:
 
     def energy_delta(self) -> dict[str, float]:
         return self._call("energy_delta")  # type: ignore[no-any-return]
+
+    def process_usage(self, pids: list[int] | None = None) -> list[list[Any]]:
+        rows: list[list[Any]] = self._call("process_usage")
+        return rows if pids is None else [row for row in rows if row[0] in set(pids)]
+
+    def process_name(self, pid: int) -> str | None:
+        value = self._keyed("process_name", pid)
+        return None if value is None else str(value)
+
+    def process_args(self, pid: int) -> list[str] | None:
+        value = self._keyed("process_args", pid)
+        return None if value is None else [str(arg) for arg in value]
 
     def close(self) -> None:
         pass
