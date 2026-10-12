@@ -34,7 +34,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from ai_meterix.core.model import DeviceSample, LocalModel, MemorySample, ProcessSample, Project
+from ai_meterix.core.model import (
+    Caller,
+    DeviceSample,
+    LlmCall,
+    LocalModel,
+    MemorySample,
+    ProcessSample,
+    Project,
+)
 from ai_meterix.core.timeutil import utc_now
 from ai_meterix.storage.base import StorageWriter
 
@@ -59,6 +67,8 @@ _KINDS: dict[str, type[Any]] = {
     "device": DeviceSample,
     "memory": MemorySample,
     "process": ProcessSample,
+    "caller": Caller,  # the proxy's buffer
+    "call": LlmCall,
 }
 _DATETIMES = ("ts", "first_seen", "last_seen")
 

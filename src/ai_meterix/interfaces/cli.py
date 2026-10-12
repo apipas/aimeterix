@@ -8,6 +8,7 @@ import logging
 import re
 import signal
 import sys
+import threading
 from collections.abc import Sequence
 
 from ai_meterix import __version__
@@ -83,6 +84,89 @@ def _agent(args: argparse.Namespace) -> int:
     return 0 if not agent.last_error else 1
 
 
+def _route(text: str) -> tuple[str, str]:
+    name, sep, url = text.partition("=")
+    if not sep or not name or not url:
+        raise argparse.ArgumentTypeError(f"expected NAME=URL, got {text!r}")
+    return name.strip(), url.strip()
+
+
+def _proxy(args: argparse.Namespace) -> int:
+    from ai_meterix.collectors.proxy import Recorder, Router, key_hash, serve
+    from ai_meterix.core.config import ProxyConfig, load_config
+    from ai_meterix.core.errors import ConfigError
+    from ai_meterix.storage import StorageWriter, open_writer
+
+    if args.hash_key:
+        key = sys.stdin.readline().strip()
+        if not key:
+            print("aimeterix proxy: paste the API key on standard input", file=sys.stderr)
+            return 2
+        print(key_hash(key))
+        return 0
+    logging.basicConfig(
+        level=logging.DEBUG if args.verbose else logging.INFO,
+        format="%(asctime)s %(levelname)s %(message)s",
+    )
+    try:
+        config = load_config(args.config)
+        settings = config.proxy.model_dump()
+        settings["upstreams"] = {**settings["upstreams"], **dict(args.route or [])}
+        if args.upstream:
+            settings["default_upstream"] = args.upstream
+        if args.port:
+            settings["port"] = args.port
+        proxy_config = ProxyConfig.model_validate(settings)
+    except (ConfigError, ValueError) as exc:
+        print(f"aimeterix proxy: {exc}", file=sys.stderr)
+        return 2
+    url = config.storage.url
+
+    def open_storage() -> StorageWriter:
+        if url.startswith("sqlite"):
+            return open_writer(url, busy_timeout_ms=config.storage.busy_timeout_ms)
+        return open_writer(url)
+
+    router = Router(proxy_config.upstreams, proxy_config.default_upstream)
+    recorder = Recorder(open_storage)
+    try:
+        server = serve(
+            router,
+            recorder,
+            host=proxy_config.host,
+            port=proxy_config.port,
+            allowed_key_hashes=proxy_config.allowed_key_hashes,
+        )
+    except (ValueError, OSError) as exc:
+        print(f"aimeterix proxy: {exc}", file=sys.stderr)
+        return 1
+    base = f"http://{proxy_config.host}:{server.server_address[1]}"
+    logger = logging.getLogger("ai_meterix.proxy")
+    logger.info("proxy on %s; Ctrl-C to stop", base)
+    for line in router.describe():
+        logger.info("  %s%s", base, line)
+    if proxy_config.allowed_key_hashes:
+        logger.info("  forwarding only %d allowed API keys", len(proxy_config.allowed_key_hashes))
+    stop = threading.Event()
+    previous = {sig: signal.signal(sig, lambda *_: stop.set()) for sig in _STOP_SIGNALS}
+    recorder.start()
+    thread = threading.Thread(target=server.serve_forever, name="aimeterix-proxy", daemon=True)
+    thread.start()
+    try:
+        stop.wait(args.duration)
+    finally:
+        server.shutdown()
+        server.server_close()
+        recorder.close()
+        for sig, handler in previous.items():
+            signal.signal(sig, handler)
+    print(
+        f"proxy stopped: {recorder.written} calls written, {recorder.pending} kept in the buffer"
+        + (f", {recorder.dropped} dropped" if recorder.dropped else "")
+    )
+    return 0 if not recorder.last_error else 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="aimeterix",
@@ -109,6 +193,28 @@ def build_parser() -> argparse.ArgumentParser:
     agent.add_argument("--config", help="path to aimeterix.yaml")
     agent.add_argument("-v", "--verbose", action="store_true", help="log more detail")
     agent.set_defaults(func=_agent)
+
+    proxy = commands.add_parser("proxy", help="forward LLM calls and record their token counts")
+    proxy.add_argument("--port", type=int, help="port on 127.0.0.1 (default 8787)")
+    proxy.add_argument(
+        "--upstream", help="where paths without a route name go, e.g. http://127.0.0.1:8080"
+    )
+    proxy.add_argument(
+        "--route",
+        action="append",
+        type=_route,
+        metavar="NAME=URL",
+        help="add a route: /NAME/... goes to URL (repeatable)",
+    )
+    proxy.add_argument("--for", dest="duration", type=duration, help="stop after this long")
+    proxy.add_argument("--config", help="path to aimeterix.yaml")
+    proxy.add_argument(
+        "--hash-key",
+        action="store_true",
+        help="read an API key on standard input and print its hash for the allowlist",
+    )
+    proxy.add_argument("-v", "--verbose", action="store_true", help="log every call's counts")
+    proxy.set_defaults(func=_proxy)
     return parser
 
 

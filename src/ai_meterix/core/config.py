@@ -14,13 +14,14 @@ addresses and secrets.
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic import ValidationError as PydanticValidationError
 
 from .errors import ConfigError
@@ -29,6 +30,9 @@ ENV_PREFIX = "AIMETERIX_"
 CONFIG_ENV = "AIMETERIX_CONFIG"
 DEFAULT_CONFIG_FILE = "aimeterix.yaml"
 DEFAULT_STORAGE_URL = "sqlite:///~/.aimeterix/meter.db"
+DEFAULT_UPSTREAMS = {"openai": "https://api.openai.com", "anthropic": "https://api.anthropic.com"}
+_ROUTE_NAME = re.compile(r"[a-z0-9][a-z0-9_-]*")
+_KEY_HASH = re.compile(r"[0-9a-f]{64}")
 
 
 class _Section(BaseModel):
@@ -47,8 +51,51 @@ class AgentConfig(_Section):
 
 
 class ProxyConfig(_Section):
+    """The LLM proxy (record 0011 item 4).
+
+    ``upstreams`` maps a route name to a provider's base URL: a client uses
+    ``http://127.0.0.1:8787/<route>/v1``. ``default_upstream`` serves paths with
+    no route name, e.g. a local llama.cpp server. ``allowed_key_hashes`` holds
+    SHA-256 hashes of the API keys the proxy may forward (``aimeterix proxy
+    --hash-key``); empty means any key.
+    """
+
     host: str = "127.0.0.1"
     port: int = Field(default=8787, ge=1, le=65535)
+    upstreams: dict[str, str] = Field(default_factory=lambda: dict(DEFAULT_UPSTREAMS))
+    default_upstream: str | None = None
+    allowed_key_hashes: tuple[str, ...] = ()
+
+    @field_validator("upstreams")
+    @classmethod
+    def _check_upstreams(cls, value: dict[str, str]) -> dict[str, str]:
+        for name, url in value.items():
+            if not _ROUTE_NAME.fullmatch(name) or name == "app":
+                raise ValueError(f"route name {name!r}: use lowercase letters, digits, - or _")
+            _check_url(url)
+        return value
+
+    @field_validator("default_upstream")
+    @classmethod
+    def _check_default(cls, value: str | None) -> str | None:
+        return None if not value else _check_url(value)
+
+    @field_validator("allowed_key_hashes", mode="before")
+    @classmethod
+    def _split_hashes(cls, value: Any) -> Any:
+        if isinstance(value, str):  # from the environment: comma-separated
+            value = [part.strip() for part in value.split(",") if part.strip()]
+        for item in value or ():
+            if not isinstance(item, str) or not _KEY_HASH.fullmatch(item):
+                raise ValueError("each entry must be a SHA-256 hex digest, not a key")
+        return value
+
+
+def _check_url(url: str) -> str:
+    parts = urlsplit(url)
+    if parts.scheme not in ("http", "https") or not parts.hostname:
+        raise ValueError(f"upstream {url!r} must be an http:// or https:// URL")
+    return url.rstrip("/")
 
 
 class ApiConfig(_Section):
