@@ -190,6 +190,7 @@ Each phase lists its goal, the steps, the decisions to settle **before** we buil
 1b. **Apple Silicon backend (tier 1):** CPU per P/E cluster, unified memory (used, wired, compressed, pressure), GPU utilization via IOKit, thermal state; power and Neural Engine via IOReport or `powermetrics` (D2.5). **L**
 1c. **NVIDIA backend (tier 2):** NVML via `nvidia-ml-py` with `nvidia-smi` fallback; per-process memory, clocks, power, throttling. psutil + RAPL for Linux CPUs. **M**
 1d. **Agent loop:** batches writes, keeps a local buffer if the database is down, mock backend for demos. **S**
+1e. **Footprint guarantees (record 0017):** the agent measures its own CPU, memory and energy against the budget and backs off when over; tests prove no sudo, no writes outside `~/.aimeterix/` and localhost-only servers. **S**
 2. **LLM proxy:** port from prototype; OpenAI-compatible and Anthropic, streaming, app and feature tags by header (`X-AIMeterix-Feature`, record 0014), cached-token fields, provider request id, never stores prompts. Add an optional key allowlist so it is not an open relay. **M**
 3. **SDK wrapper:** `with aimeterix.track(project="x"):` and a decorator for teams who don't want a proxy. **S**
 4. **OTLP receiver (stretch):** accept OpenTelemetry GenAI spans so teams already using OTel need no new client. **M**
@@ -208,6 +209,7 @@ Each phase lists its goal, the steps, the decisions to settle **before** we buil
 | D2.7 | NVIDIA | ✅ agreed | Not in MVP-1; small experimental module tested on recorded `nvidia-smi` output |
 | D2.8 | SDK wrapper | ✅ agreed | MVP-2, with D2.3 |
 | D2.9 | Per-app and per-model energy | ✅ agreed | MVP-1: per-app CPU/GPU time, attributed energy, model detection for Ollama and llama.cpp |
+| D2.10 | Footprint and safety | ✅ agreed | No sudo, observe only, localhost only, budget < 1% CPU / 100 MB / 0.1 W, verified `stop`; record [0017](decisions/0017-footprint-and-safety.md) |
 
 **Release stages:** MVP-1 is one Mac (probe, agent, per-app and per-model energy, proxy, SQLite, cost engine with token counts per model, localhost API with login, advisor with R1–R6, forecast and one budget, `init` from the config file, `start` / `stop` / `health`, read-only dashboard with advice on request). MVP-2 adds services, reports and alerts (record 0016), several machines, the SDK wrapper, NVIDIA on real hardware, and the host registry with tags.
 
@@ -288,7 +290,7 @@ Each phase lists its goal, the steps, the decisions to settle **before** we buil
 
 **Steps (MVP-1)**
 1. **`aimeterix init` from the config file:** without `aimeterix.yaml` it writes a commented starter file; with it, it shows a summary, the user confirms, then it seeds the database (record 0013), runs `doctor` and prints `aimeterix start` and the proxy lines for clients. **S**
-1b. **`aimeterix start` / `stop`:** start or stop `agent`, `proxy` and `serve` in the background (all by default, or one by name). PID files and logs in `~/.aimeterix/`; `start` refuses to run a second copy; `stop` lets the agent and proxy flush their buffers before exiting. Keeps running after the terminal closes; not after a reboot (auto-start is MVP-2). **S**
+1b. **`aimeterix start` / `stop`:** start or stop `agent`, `proxy` and `serve` in the background (all by default, or one by name). PID files and logs in `~/.aimeterix/`; `start` refuses to run a second copy; `stop` lets the agent and proxy flush their buffers before exiting. Keeps running after the terminal closes; not after a reboot (auto-start is MVP-2). **S** `stop` verifies nothing is left running (record 0017); `stop --keep-proxy` and `uninstall --purge`.
 1c. **`aimeterix health`:** live check of the running setup: each process up or down (with uptime), last hardware sample and last proxied call (with age), database reachable, size and write delay. Exit code 0 when healthy, 1 when not, so scripts can use it. Same data from `GET /api/health`. `doctor` stays the static check (what this Mac can measure); `health` is the runtime check (is it measuring now). **S**
 2. **`aimeterix serve`:** the localhost API (Phase 3) and the dashboard in one process. **S**
 3. **Dashboard endpoint:** `GET /api/dashboard` (range, model, feature), same computation as the CLI. **S**
