@@ -158,6 +158,7 @@ def iokit() -> ctypes.CDLL:
     _fn(lib, "IOObjectRelease", c_int, c_uint32)
     _fn(lib, "IORegistryEntryFromPath", c_uint32, c_uint32, c_char_p)
     _fn(lib, "IORegistryEntryGetChildIterator", c_int, c_uint32, c_char_p, POINTER(c_uint32))
+    _fn(lib, "IORegistryEntryCreateCFProperty", c_void_p, c_uint32, c_void_p, c_void_p, c_uint32)
     _fn(
         lib,
         "IORegistryEntryCreateCFProperties",
@@ -189,6 +190,19 @@ def properties(entry: int) -> dict[str, Any]:
     finally:
         release(props.value)
     return value if isinstance(value, dict) else {}
+
+
+def entry_property(entry: int, key: str) -> Any:
+    """One registry property of an IOKit entry; cheaper than ``properties``."""
+    name = cfstr(key)
+    try:
+        ref = iokit().IORegistryEntryCreateCFProperty(entry, name, None, 0)
+    finally:
+        release(name)
+    try:
+        return to_python(ref)
+    finally:
+        release(ref)
 
 
 def matching(class_name: str) -> Iterator[int]:

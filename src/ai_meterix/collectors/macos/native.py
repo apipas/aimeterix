@@ -261,7 +261,39 @@ class EnergySampler:
 
 
 class NativeReaders:
-    """Live readers for this Mac."""
+    """Live readers for this Mac. Keeps the GPU entry and the energy
+    subscription open between samples; call ``close`` when done."""
+
+    def __init__(self) -> None:
+        self._energy: EnergySampler | None = None
+        self._gpu_entry = 0
+
+    def close(self) -> None:
+        if self._energy is not None:
+            self._energy.close()
+            self._energy = None
+        _cf.free(self._gpu_entry)
+        self._gpu_entry = 0
+
+    def energy_delta(self) -> dict[str, float]:
+        """Joules per energy channel since the previous call ({} on the first)."""
+        if self._energy is None:
+            self._energy = EnergySampler()
+        return self._energy.read()
+
+    def gpu_stats(self) -> dict[str, float]:
+        """Performance statistics of the first GPU, read without its other properties."""
+        if not self._gpu_entry:
+            entries = list(_cf.matching("IOAccelerator"))
+            if not entries:
+                raise OSError("no GPU found in IOKit (IOAccelerator)")
+            self._gpu_entry = entries[0]
+            for extra in entries[1:]:
+                _cf.free(extra)
+        stats = _cf.entry_property(self._gpu_entry, "PerformanceStatistics")
+        if not isinstance(stats, dict):
+            raise OSError("the GPU publishes no performance statistics")
+        return {k: v for k, v in stats.items() if isinstance(v, (int, float))}
 
     def sysctl_str(self, name: str) -> str | None:
         raw = _sysctl_raw(name)
