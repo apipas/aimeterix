@@ -30,17 +30,17 @@ from __future__ import annotations
 import contextlib
 import functools
 import hashlib
+import http.client
 import ipaddress
 import json
 import logging
+import ssl
 import threading
 import time
-import urllib.error
 import urllib.request
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
-from http.client import HTTPResponse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -389,8 +389,13 @@ class ProxyServer(ThreadingHTTPServer):
         self.router = router
         self.recorder = recorder
         self.allowed = frozenset(allowed_key_hashes)
+        self.upstreams = Upstreams()
         self._warned: set[str] = set()
         super().__init__(address, ProxyHandler)
+
+    def server_close(self) -> None:
+        super().server_close()
+        self.upstreams.close()
 
     def warn_once(self, key: str, message: str) -> None:
         if key not in self._warned:
@@ -408,12 +413,103 @@ def _api_key(headers: Mapping[str, str]) -> str | None:
     return None
 
 
-@functools.cache
-def _opener(local: bool) -> urllib.request.OpenerDirector:
-    """Built once: creating the TLS context costs about 20 ms."""
-    if local:  # never send local traffic through a system proxy
-        return urllib.request.build_opener(urllib.request.ProxyHandler({}))
-    return urllib.request.build_opener()
+class Upstreams:
+    """Keeps connections to providers open between calls (HTTP keep-alive).
+
+    A new TLS connection to a cloud provider costs tens of milliseconds, so
+    idle connections are reused. A reused connection the provider has closed
+    in the meantime is retried once on a new one; nothing was processed then.
+    Remote hosts honor the usual ``HTTPS_PROXY`` / ``NO_PROXY`` settings;
+    local ones never go through a proxy.
+    """
+
+    MAX_IDLE = 8  # per host
+
+    def __init__(self, timeout_s: float = UPSTREAM_TIMEOUT_S) -> None:
+        self.timeout_s = timeout_s
+        self._idle: dict[tuple[str, str, int], list[http.client.HTTPConnection]] = {}
+        self._lock = threading.Lock()
+        self._tls = ssl.create_default_context()
+        self.opened = 0
+
+    def _new(self, scheme: str, host: str, port: int) -> http.client.HTTPConnection:
+        self.opened += 1
+        proxy = None
+        if not is_loopback(host) and not urllib.request.proxy_bypass(host):
+            proxy = urllib.request.getproxies().get(scheme)
+        conn: http.client.HTTPConnection
+        if proxy:
+            p = urlsplit(proxy if "://" in proxy else f"http://{proxy}")
+            conn = http.client.HTTPConnection(
+                p.hostname or "", p.port or 80, timeout=self.timeout_s
+            )
+            if scheme == "https":
+                conn = http.client.HTTPSConnection(
+                    p.hostname or "", p.port or 80, timeout=self.timeout_s, context=self._tls
+                )
+                conn.set_tunnel(host, port)
+        elif scheme == "https":
+            conn = http.client.HTTPSConnection(
+                host, port, timeout=self.timeout_s, context=self._tls
+            )
+        else:
+            conn = http.client.HTTPConnection(host, port, timeout=self.timeout_s)
+        return conn
+
+    def request(
+        self, method: str, url: str, body: bytes | None, headers: Mapping[str, str]
+    ) -> tuple[http.client.HTTPResponse, Callable[[], None]]:
+        """Send a request; returns the response and a ``done`` callback that
+        gives the connection back (call it after reading the body)."""
+        parts = urlsplit(url)
+        scheme = parts.scheme
+        host = parts.hostname or ""
+        port = parts.port or (443 if scheme == "https" else 80)
+        key = (scheme, host, port)
+        target = (parts.path or "/") + (f"?{parts.query}" if parts.query else "")
+        for attempt in (1, 2):
+            with self._lock:
+                idle = self._idle.get(key)
+                conn = idle.pop() if idle else None
+            reused = conn is not None
+            if conn is None:
+                conn = self._new(scheme, host, port)
+            try:
+                conn.request(method, target, body=body, headers=dict(headers))
+                response = conn.getresponse()
+            except (http.client.RemoteDisconnected, ConnectionResetError, BrokenPipeError):
+                conn.close()
+                if reused and attempt == 1:
+                    continue  # the provider closed an idle connection; try a fresh one
+                raise
+            except Exception:
+                conn.close()
+                raise
+            return response, functools.partial(self._done, key, conn, response)
+        raise AssertionError("unreachable")
+
+    def _done(
+        self,
+        key: tuple[str, str, int],
+        conn: http.client.HTTPConnection,
+        response: http.client.HTTPResponse,
+    ) -> None:
+        if response.will_close or not response.isclosed():
+            conn.close()
+            return
+        with self._lock:
+            idle = self._idle.setdefault(key, [])
+            if len(idle) < self.MAX_IDLE:
+                idle.append(conn)
+                return
+        conn.close()
+
+    def close(self) -> None:
+        with self._lock:
+            conns = [c for idle in self._idle.values() for c in idle]
+            self._idle.clear()
+        for conn in conns:
+            conn.close()
 
 
 class ProxyHandler(BaseHTTPRequestHandler):
@@ -467,29 +563,26 @@ class ProxyHandler(BaseHTTPRequestHandler):
             for k, v in self.headers.items()
             if k.lower() not in _HOP_HEADERS and not k.lower().startswith(HEADER_PREFIX)
         }
-        request = urllib.request.Request(
-            route.upstream + route.path, data=body, headers=forward, method=self.command
-        )
         try:
-            local = is_loopback(urlsplit(route.upstream).hostname or "")
-            response: HTTPResponse = _opener(local).open(request, timeout=UPSTREAM_TIMEOUT_S)
-        except urllib.error.HTTPError as exc:
-            response = exc  # type: ignore[assignment]  # carries the provider's error body
-        except (urllib.error.URLError, OSError) as exc:
-            reason = getattr(exc, "reason", exc)
-            self._send_error(502, f"upstream unreachable: {reason}")
+            response, done = self.server.upstreams.request(
+                self.command, route.upstream + route.path, body, forward
+            )
+        except OSError as exc:
+            self._send_error(502, f"upstream unreachable: {exc}")
             return
         call_type = call_type_of(self.command, route.path)
         capture = _Capture() if call_type is not None else None
-        status = response.status if hasattr(response, "status") else response.getcode()
+        status = response.status
         try:
             self._relay(response, status, capture)
         finally:
-            response.close()
+            done()
         if call_type is not None and capture is not None:
             self._record(route, headers, body, response, status, capture, call_type, ts, started)
 
-    def _relay(self, response: HTTPResponse, status: int, capture: _Capture | None) -> None:
+    def _relay(
+        self, response: http.client.HTTPResponse, status: int, capture: _Capture | None
+    ) -> None:
         self.send_response(status)
         for name, value in response.headers.items():
             if name.lower() not in _HOP_HEADERS:
@@ -527,7 +620,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
         route: Route,
         headers: Mapping[str, str],
         body: bytes | None,
-        response: HTTPResponse,
+        response: http.client.HTTPResponse,
         status: int,
         capture: _Capture,
         call_type: CallType,
