@@ -26,6 +26,12 @@ def readings() -> dict[str, Any]:
     data = copy.deepcopy(recorded)
     data["energy_delta"] = [{}, recorded["energy"][0]]
     data["gpu_stats"] = [recorded["gpu"][0][0]["stats"]]
+    # synthetic apps: pid 7 runs llama-server and is also a recorded GPU client
+    clients = recorded["gpu_clients"][0]
+    data["gpu_clients"] = [clients, [*clients, {"pid": 7, "gpu_ns": 200_000_000}]]
+    data["process_usage"] = [[[7, 10.0, 1], [8, 3.0, 2]], [[7, 10.1, 1], [8, 3.05, 2]]]
+    data["process_name"] = {"7": "llama-server", "8": "editor"}
+    data["process_args"] = {"7": ["llama-server", "-m", "/models/qwen-a3b.gguf"]}
     return data
 
 
@@ -38,7 +44,12 @@ def backend(data: dict[str, Any] | None = None) -> AppleSiliconBackend:
         readers=ReplayReaders(data if data is not None else readings()),
         clock=lambda: next(ticks),
         now=lambda: next(stamps),
+        fetch=refuse,
     )
+
+
+def refuse(url: str) -> Any:
+    raise OSError("connection refused")
 
 
 def by_id(batch: Any) -> dict[str, Any]:
@@ -78,7 +89,7 @@ def test_second_sample_turns_counters_into_rates() -> None:
     samples = by_id(batch)
     assert set(samples) == {"m4:cpu-p", "m4:cpu-e", "m4:gpu", "m4:npu"}
     assert all(s.interval_s == INTERVAL for s in samples.values())
-    assert all(s.ts == T0 for s in samples.values())
+    assert all(s.ts == T0 + timedelta(seconds=1) for s in samples.values())
 
     before, after = data["cpu_ticks"]
 
@@ -102,6 +113,28 @@ def test_second_sample_turns_counters_into_rates() -> None:
     assert samples["m4:npu"].util_pct is None  # macOS shows no Neural Engine use
     assert samples["m4:gpu"].util_pct == data["gpu_stats"][0]["Device Utilization %"]
     assert samples["m4:cpu-p"].extra == {"thermal": "nominal"}
+
+
+def test_apps_get_cpu_and_gpu_time_and_a_share_of_the_energy() -> None:
+    data = readings()
+    b = backend(data)
+    b.sample()
+    batch = b.sample()
+    apps = {p.process_name: p for p in batch.process_samples}
+    assert set(apps) == {"llama-server", "editor"}
+    llama = apps["llama-server"]
+    assert llama.cpu_time_s == pytest.approx(0.1)
+    assert llama.gpu_time_s == pytest.approx(0.2)
+    assert llama.local_model_id == "m4:llama.cpp:qwen-a3b"
+    energy = data["energy"][0]
+    gpu_busy = data["gpu_stats"][0]["Device Utilization %"] / 100 * INTERVAL
+    gpu_share = energy["GPU Energy"] * 0.2 / max(0.2, gpu_busy)
+    assert llama.attributed_energy_j is not None
+    assert llama.attributed_energy_j > gpu_share
+    assert apps["editor"].attributed_energy_j == pytest.approx(
+        (llama.attributed_energy_j - gpu_share) / 2
+    )
+    assert [m.model_name for m in batch.local_models] == ["qwen-a3b"]
 
 
 def test_memory_sample_reads_the_unified_pool() -> None:
@@ -185,6 +218,9 @@ def test_samples_store_in_sqlite(tmp_path: Path) -> None:
         batch = b.sample()
         assert storage.write_device_samples(batch.device_samples) == 4
         assert storage.write_memory_samples(batch.memory_samples) == 1
+        storage.upsert_local_models(batch.local_models)
+        assert storage.write_process_samples(batch.process_samples) == 2
+        assert [m.model_name for m in storage.get_local_models("m4")] == ["qwen-a3b"]
     finally:
         storage.close()
 

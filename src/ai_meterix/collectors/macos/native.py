@@ -1,8 +1,9 @@
 """Readers for macOS system counters, called through ctypes (record 0011 item 2).
 
 Each method returns plain, JSON-safe values so a probe run can be recorded on a
-Mac and replayed in tests anywhere (``ReplayReaders``). Process names are never
-returned: only counts, pids and times.
+Mac and replayed in tests anywhere (``ReplayReaders``). Only ``process_name`` and
+``process_args`` return process details; the probe never calls them, so a
+recorded probe run holds no process names.
 
 Sources, all readable without admin rights:
 
@@ -12,7 +13,9 @@ Sources, all readable without admin rights:
   from the ``IOAccelerator`` service and its user clients.
 - IOReport (undocumented): the "Energy Model" counters for CPU, GPU and Neural Engine.
 - ``notify``: the system thermal-pressure level.
-- libproc: the process list and each process's CPU time.
+- libproc: the process list, each process's CPU time and name.
+- ``sysctl`` ``KERN_PROCARGS2``: command-line arguments, read only for known
+  local model runtimes (``process_args``).
 """
 
 from __future__ import annotations
@@ -44,6 +47,8 @@ _IOREPORT = "/usr/lib/libIOReport.dylib"
 HOST_VM_INFO64 = 4
 PROCESSOR_CPU_LOAD_INFO = 2
 RUSAGE_INFO_V2 = 2
+CTL_KERN = 1
+KERN_PROCARGS2 = 49
 THERMAL_NOTIFY = b"com.apple.system.thermalpressurelevel"
 ENERGY_UNITS = {"J": 1.0, "mJ": 1e-3, "uJ": 1e-6, "µJ": 1e-6, "nJ": 1e-9}
 
@@ -136,6 +141,19 @@ def _libsystem() -> ctypes.CDLL:
     _fn(lib, "notify_cancel", c_uint32, c_int)
     _fn(lib, "proc_listallpids", c_int, c_void_p, c_int)
     _fn(lib, "proc_pid_rusage", c_int, c_int, c_int, c_void_p)
+    _fn(lib, "proc_name", c_int, c_int, c_void_p, c_uint32)
+    _fn(lib, "proc_pidpath", c_int, c_int, c_void_p, c_uint32)
+    _fn(
+        lib,
+        "sysctl",
+        c_int,
+        POINTER(c_int),
+        c_uint32,
+        c_void_p,
+        POINTER(c_size_t),
+        c_void_p,
+        c_size_t,
+    )
     return lib
 
 
@@ -196,6 +214,27 @@ def _sysctl_raw(name: str) -> bytes | None:
     if lib.sysctlbyname(name.encode(), buf, byref(size), None, 0) != 0:
         return None
     return buf.raw[: size.value]
+
+
+def _all_pids() -> list[int]:
+    lib = _libsystem()
+    size = lib.proc_listallpids(None, 0)
+    if size <= 0:
+        raise OSError("cannot list processes")
+    pids = (c_int * (size + 64))()
+    found = lib.proc_listallpids(pids, ctypes.sizeof(pids))
+    return [pid for pid in pids[:found] if pid > 0]
+
+
+def parse_procargs(raw: bytes) -> list[str]:
+    """Arguments from a ``KERN_PROCARGS2`` buffer: argc, the executable path,
+    padding, then argc NUL-terminated strings (the environment follows and is ignored)."""
+    if len(raw) < 4:
+        return []
+    argc = struct.unpack("<i", raw[:4])[0]
+    _, _, rest = raw[4:].partition(b"\x00")
+    parts = rest.lstrip(b"\x00").split(b"\x00")
+    return [part.decode("utf-8", "replace") for part in parts[: max(argc, 0)]]
 
 
 class EnergySampler:
@@ -431,18 +470,50 @@ class NativeReaders:
         finally:
             lib.notify_cancel(token.value)
 
+    def process_usage(self, pids: list[int] | None = None) -> list[list[Any]]:
+        """[pid, CPU seconds since start, start time] for each readable process
+        (all of them when ``pids`` is None). Unreadable processes are left out."""
+        lib = _libsystem()
+        usage = _RusageInfoV2()
+        scale = _abs_to_s()
+        rows: list[list[Any]] = []
+        for pid in _all_pids() if pids is None else pids:
+            if pid > 0 and lib.proc_pid_rusage(pid, RUSAGE_INFO_V2, byref(usage)) == 0:
+                cpu_s = (usage.user_time + usage.system_time) * scale
+                rows.append([int(pid), cpu_s, int(usage.proc_start_abstime)])
+        return rows
+
+    def process_name(self, pid: int) -> str | None:
+        """The process name, or its executable's file name when the name is not readable."""
+        lib = _libsystem()
+        buf = ctypes.create_string_buffer(4096)
+        if lib.proc_name(pid, buf, 64) > 0 and buf.value:
+            return buf.value.decode("utf-8", "replace")
+        if lib.proc_pidpath(pid, buf, len(buf)) > 0 and buf.value:
+            return os.path.basename(buf.value.decode("utf-8", "replace"))
+        return None
+
+    def process_args(self, pid: int) -> list[str] | None:
+        """Command-line arguments of one of this user's processes (None when not readable)."""
+        lib = _libsystem()
+        mib = (c_int * 3)(CTL_KERN, KERN_PROCARGS2, pid)
+        size = c_size_t()
+        if lib.sysctl(mib, 3, None, byref(size), None, 0) != 0 or not size.value:
+            return None
+        buf = ctypes.create_string_buffer(size.value)
+        if lib.sysctl(mib, 3, buf, byref(size), None, 0) != 0:
+            return None
+        return parse_procargs(buf.raw[: size.value])
+
     def processes(self) -> dict[str, Any]:
         """How many processes exist and how many we may read, plus our own CPU time."""
         lib = _libsystem()
-        size = lib.proc_listallpids(None, 0)
-        if size <= 0:
-            raise OSError("cannot list processes")
-        pids = (c_int * (size + 64))()
-        found = lib.proc_listallpids(pids, ctypes.sizeof(pids))
+        pids = _all_pids()
+        found = len(pids)
         readable = 0
         usage = _RusageInfoV2()
-        for pid in pids[:found]:
-            if pid > 0 and lib.proc_pid_rusage(pid, RUSAGE_INFO_V2, byref(usage)) == 0:
+        for pid in pids:
+            if lib.proc_pid_rusage(pid, RUSAGE_INFO_V2, byref(usage)) == 0:
                 readable += 1
         own = _RusageInfoV2()
         if lib.proc_pid_rusage(os.getpid(), RUSAGE_INFO_V2, byref(own)) != 0:

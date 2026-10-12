@@ -6,7 +6,9 @@ previous call into samples:
 - one device per CPU cluster (``cpu-p``, ``cpu-e``) with use and power,
 - the GPU with use and power, and the Neural Engine with power only,
 - one unified memory pool with used, wired, compressed and swap bytes, the
-  GPU's share and the memory pressure.
+  GPU's share and the memory pressure,
+- per-app CPU and GPU time with attributed energy, and the local models
+  loaded by Ollama or llama.cpp (``AppTracker``).
 
 Counters that macOS keeps as running totals (CPU ticks, energy) are turned into
 deltas, so totals stay exact at any interval (0011 item 1). A reader that fails
@@ -31,15 +33,19 @@ from ai_meterix.core.model import (
     DeviceKind,
     DeviceSample,
     Host,
+    LocalModel,
     MemoryPool,
     MemoryPressure,
     MemorySample,
     PoolType,
+    ProcessSample,
 )
 from ai_meterix.core.timeutil import utc_now
 from ai_meterix.storage.base import HostInventory
 
 from ..base import SampleBatch
+from ..runtimes import Fetch, local_fetch
+from .apps import AppTracker
 from .probe import BACKEND, THERMAL_LEVELS, MacReaders, platform_info
 
 PRESSURE = {1: MemoryPressure.NORMAL, 2: MemoryPressure.WARNING, 4: MemoryPressure.CRITICAL}
@@ -90,6 +96,9 @@ class AppleSiliconBackend:
         readers: MacReaders | None = None,
         clock: Callable[[], float] = time.monotonic,
         now: Callable[[], datetime] = utc_now,
+        apps: bool = True,
+        full_scan_s: float = 60.0,
+        fetch: Fetch = local_fetch,
     ) -> None:
         if readers is None:
             from .native import NativeReaders
@@ -111,6 +120,11 @@ class AppleSiliconBackend:
         self._disabled: dict[str, str] = {}
         self._prev_ticks: list[list[int]] | None = None
         self._prev_t: float | None = None
+        self.apps = (
+            AppTracker(self.host_id, readers, full_scan_s=full_scan_s, fetch=fetch)
+            if apps
+            else None
+        )
 
     # --- ids -----------------------------------------------------------------
 
@@ -197,7 +211,19 @@ class AppleSiliconBackend:
         prev_ticks, prev_t = self._prev_ticks, self._prev_t
         self._prev_ticks, self._prev_t = ticks, t
         if prev_t is None:
-            return SampleBatch(problems=tuple(problems))
+            models: list[LocalModel] = []
+            if self.apps is not None:
+                _, models = self.apps.sample(
+                    self._now(),
+                    t,
+                    0.0,
+                    cpu_j=None,
+                    busy_cpu_s=None,
+                    gpu_j=None,
+                    gpu_busy_s=None,
+                    problems=problems,
+                )
+            return SampleBatch(local_models=tuple(models), problems=tuple(problems))
         interval = t - prev_t
         if interval <= 0:
             return SampleBatch(problems=(*problems, "clock did not advance; tick skipped"))
@@ -225,6 +251,11 @@ class AppleSiliconBackend:
         pairs: list[tuple[list[int], list[int]]] = []
         if ticks is not None and prev_ticks is not None and len(ticks) == len(prev_ticks):
             pairs = list(zip(prev_ticks, ticks, strict=True))
+        busy_cpu_s = None
+        if pairs:
+            busy_all, total_all = map(sum, zip(*(_busy(a, b) for a, b in pairs), strict=True))
+            if total_all:
+                busy_cpu_s = busy_all / total_all * len(pairs) * interval
         for part in self._cpu_parts():
             util = None
             if pairs:
@@ -254,7 +285,22 @@ class AppleSiliconBackend:
         devices.append(DeviceSample(ts, self._id("npu"), interval, None, watts("npu")))
 
         memory = self._memory_sample(ts, interval, vm, swap, level, gpu, watts("dram"), problems)
-        return SampleBatch(tuple(devices), (memory,), tuple(problems))
+        processes: list[ProcessSample] = []
+        models = []
+        if self.apps is not None:
+            processes, models = self.apps.sample(
+                ts,
+                t,
+                interval,
+                cpu_j=parts.get("cpu"),
+                busy_cpu_s=busy_cpu_s,
+                gpu_j=parts.get("gpu"),
+                gpu_busy_s=None if gpu_util is None else float(gpu_util) / 100 * interval,
+                problems=problems,
+            )
+        return SampleBatch(
+            tuple(devices), (memory,), tuple(processes), tuple(models), tuple(problems)
+        )
 
     def _memory_sample(
         self,
@@ -323,6 +369,17 @@ def main(count: int = 3, interval_s: float = 2.0) -> None:
                     f"gpu {gb(m.gpu_allocated_bytes)}, pressure "
                     f"{m.pressure.value if m.pressure else '-'} {m.extra}"
                 )
+            top = sorted(batch.process_samples, key=lambda p: -(p.attributed_energy_j or 0))
+            for p in top[:8]:
+                energy = "-" if p.attributed_energy_j is None else f"{p.attributed_energy_j:.2f} J"
+                gpu_s = "-" if p.gpu_time_s is None else f"{p.gpu_time_s:.2f} s"
+                cpu_s = "-" if p.cpu_time_s is None else f"{p.cpu_time_s:.2f} s"
+                print(
+                    f"app {p.process_name[:26]:<26} cpu {cpu_s:>8}  gpu {gpu_s:>8}"
+                    f"  energy {energy:>9} (est.)  {p.local_model_id or ''}"
+                )
+            for model in batch.local_models:
+                print(f"model {model.id} pid {model.pid} size {model.size_bytes}")
             for problem in batch.problems:
                 print(f"problem: {problem}")
             print()
