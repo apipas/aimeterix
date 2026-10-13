@@ -142,6 +142,13 @@ class Setup:
         return result
 
     def calls(self) -> list[dict[str, Any]]:
+        # the proxy records a call just after the client has the whole response
+        deadline, seen, quiet = time.monotonic() + 2, -1, 0.0
+        while time.monotonic() < deadline and quiet < 0.2:
+            pending = self.recorder.pending
+            quiet = quiet + 0.02 if pending == seen else 0.0
+            seen = pending
+            time.sleep(0.02)
         assert self.recorder.flush()
         if not self.db.exists():
             return []
@@ -472,3 +479,16 @@ def test_a_connection_the_provider_closed_is_retried_once(tmp_path: Path) -> Non
         proxy.server_close()
         recorder.close()
         upstream.shutdown()
+
+
+def test_a_new_model_gets_a_price_row_once(setup: Setup) -> None:
+    for _ in range(2):
+        setup.request("/up/v1/chat/completions", {"model": "gpt-x", "messages": []})
+    assert len(setup.calls()) == 2
+    storage = open_writer(f"sqlite:///{setup.db}")
+    try:
+        (price,) = storage.get_prices("gpt-x")
+        assert price.source.value == "api" and not price.price_set  # "price not set"
+        assert {c.by for c in storage.get_price_changes("gpt-x")} == {"proxy"}
+    finally:
+        storage.close()
