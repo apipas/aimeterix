@@ -4,7 +4,7 @@
 
 AI Meterix is an open-source tool for teams running AI on their own GPUs, rented cloud GPUs and LLM APIs. It meters usage, prices it with *your* rates, tells you in plain language what to change, and forecasts next month with a range. Store the data in whatever you already use: SQLite, DuckDB, PostgreSQL, or your own connector.
 
-> **Status: early development.** Phases 1 and 2 are in progress: the data model, storage connectors (SQLite default, PostgreSQL, DuckDB), `aimeterix doctor`, the Apple Silicon agent, the LLM proxy and the cost engine (`usage`, `profile`, `prices`) exist. The local API, reports and the dashboard come next. Read the plan in [docs/PLAN.md](docs/PLAN.md).
+> **Status: early development.** Phases 1 and 2 are in progress: the data model, storage connectors (SQLite default, PostgreSQL, DuckDB), `aimeterix doctor`, the Apple Silicon agent, the LLM proxy and the cost engine (`usage`, `profile`, `prices`) and the localhost API (`serve`) exist. Reports and the dashboard come next. Read the plan in [docs/PLAN.md](docs/PLAN.md).
 
 ## Try it
 
@@ -16,7 +16,10 @@ aimeterix profile set --rate 0.33 --fees 0   # your energy price and fees, in US
 aimeterix usage                  # tokens, Wh and cost per model and day
 aimeterix prices                 # price per 1M tokens for each model
 aimeterix prices apply-reference # copy the dated OpenAI/Anthropic list (see `prices reference`)
+aimeterix serve                  # JSON API on http://127.0.0.1:8788/api with login
 ```
+
+`aimeterix serve` creates two accounts, `user` (read) and `admin` (read and write), whose first password is their name and must be changed at first login (`POST /api/password`, or `aimeterix password admin`). Log in with `POST /api/login`, then send `Authorization: Bearer <token>`. Endpoints are listed in `src/ai_meterix/interfaces/api.py`.
 
 Point your app at the proxy instead of the provider: `http://127.0.0.1:8787/openai/v1`, `http://127.0.0.1:8787/anthropic` or, with `--upstream`, `http://127.0.0.1:8787/v1`. Add `X-AIMeterix-App` and `X-AIMeterix-Feature` headers (or `/app/<name>/` in the path) to see who made each call. Only token counts, timings and tags are stored, never prompts, responses or keys.
 
