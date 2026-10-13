@@ -296,6 +296,113 @@ def _profile(args: argparse.Namespace) -> int:
     return 0
 
 
+def _prices(args: argparse.Namespace) -> int:
+    import getpass
+    from decimal import Decimal, InvalidOperation
+
+    from ai_meterix.core.config import load_config
+    from ai_meterix.core.errors import AiMeterixError
+    from ai_meterix.core.model import PriceSource
+    from ai_meterix.pricing.engine import local_zone
+    from ai_meterix.pricing.prices import (
+        apply_reference,
+        current_prices,
+        load_reference,
+        set_price,
+    )
+    from ai_meterix.storage import open_reader, open_writer
+
+    from .prices import render_applied, render_history, render_prices, render_reference
+
+    reference = load_reference()
+    if args.action == "reference":
+        print(render_reference(reference))
+        return 0
+    tz = local_zone()
+    now = datetime.now(timezone.utc)
+    writes = args.action == "set" or (args.action == "apply-reference" and not args.dry_run)
+    if args.action == "set" and not args.model:
+        print(
+            "aimeterix prices: name the model, e.g. `prices set gpt-6-luna --input 0.10`",
+            file=sys.stderr,
+        )
+        return 2
+    url = args.url or load_config(args.config).storage.url
+    try:
+        storage = open_writer(url) if writes else open_reader(url)
+    except AiMeterixError as exc:
+        print(f"aimeterix prices: {exc}", file=sys.stderr)
+        return 1
+    try:
+        currencies = set()
+        for inventory in storage.get_hosts():
+            profile = storage.get_profile(inventory.host.id)
+            if profile is not None:
+                currencies.add(profile.currency)
+        currency = next(iter(currencies)) if len(currencies) == 1 else None
+        if args.action == "history":
+            print(render_history(storage.get_price_changes(args.model), tz))
+        elif args.action == "set":
+            try:
+                values = {
+                    name: Decimal(value)
+                    for name, value in (
+                        ("input_per_m", args.input),
+                        ("output_per_m", args.output),
+                        ("cache_read_per_m", args.cache_read),
+                        ("cache_write_per_m", args.cache_write),
+                    )
+                    if value is not None
+                }
+            except InvalidOperation:
+                print("aimeterix prices: prices are numbers per 1M tokens", file=sys.stderr)
+                return 2
+            start = (
+                datetime.combine(args.since, time.min, tz).astimezone(timezone.utc)
+                if args.since
+                else None
+            )
+            source = PriceSource.LOCAL if args.local else None
+            set_price(
+                storage,  # type: ignore[arg-type]
+                args.model,
+                values,
+                now=now,
+                by=getpass.getuser(),
+                start=start,
+                source=source,
+            )
+            print(render_prices(current_prices(storage, now), currency, tz, reference))
+        elif args.action == "apply-reference":
+            mismatch = currencies - {reference.currency}
+            if mismatch and not args.ignore_currency:
+                print(
+                    f"aimeterix prices: your cost profile is in {', '.join(sorted(mismatch))} "
+                    f"but the reference list is in {reference.currency}, and AI Meterix does "
+                    "not convert currencies (record 0012). Set prices yourself with "
+                    "`aimeterix prices set`, or use the "
+                    f"{reference.currency} numbers as they are with --ignore-currency.",
+                    file=sys.stderr,
+                )
+                return 2
+            results = apply_reference(
+                storage,  # type: ignore[arg-type]
+                reference,
+                now=now,
+                by=getpass.getuser(),
+                dry_run=args.dry_run,
+            )
+            print(render_applied(results, args.dry_run))
+        else:
+            print(render_prices(current_prices(storage, now), currency, tz, reference))
+    except AiMeterixError as exc:
+        print(f"aimeterix prices: {exc}", file=sys.stderr)
+        return 2
+    finally:
+        storage.close()
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="aimeterix",
@@ -375,6 +482,35 @@ def build_parser() -> argparse.ArgumentParser:
     profile.add_argument("--url", help="storage URL (default: from the config)")
     profile.add_argument("--config", help="path to aimeterix.yaml")
     profile.set_defaults(func=_profile)
+
+    prices = commands.add_parser("prices", help="show or set model prices per 1M tokens")
+    prices.add_argument(
+        "action",
+        nargs="?",
+        choices=("list", "set", "history", "reference", "apply-reference"),
+        default="list",
+    )
+    prices.add_argument("model", nargs="?", help="model name, for set and history")
+    prices.add_argument("--input", help="price per 1M input tokens")
+    prices.add_argument("--output", help="price per 1M output tokens")
+    prices.add_argument("--cache-read", help="price per 1M cache read tokens")
+    prices.add_argument("--cache-write", help="price per 1M cache write tokens")
+    prices.add_argument(
+        "--from",
+        dest="since",
+        type=_day,
+        help="start a new price period on this local day; earlier days keep their price",
+    )
+    prices.add_argument("--local", action="store_true", help="the model runs on this machine")
+    prices.add_argument("--dry-run", action="store_true", help="apply-reference: only show")
+    prices.add_argument(
+        "--ignore-currency",
+        action="store_true",
+        help="apply-reference: use the list's USD numbers in your profile's currency",
+    )
+    prices.add_argument("--url", help="storage URL (default: from the config)")
+    prices.add_argument("--config", help="path to aimeterix.yaml")
+    prices.set_defaults(func=_prices)
     return parser
 
 

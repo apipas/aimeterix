@@ -16,7 +16,8 @@ For each hour and host:
   fee still ran) is the "idle overhead" line;
 - **tokens** x the model's price per 1M tokens of each type, at the time of
   the call. An API model with no price, or ``price_set = False``, costs 0 and
-  is marked "price not set".
+  is marked "price not set". A dated snapshot with no row of its own
+  (``claude-opus-4-1-20250805``) uses its base model's price.
 
 The profile in force at an hour is the last version saved by then; hours
 before the first version use the first one. Hours come from raw samples where
@@ -38,6 +39,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from ai_meterix.core.model import CostProfile, FeeSpread, ModelPrice
 from ai_meterix.core.timeutil import ensure_utc
+from ai_meterix.pricing.prices import base_model, price_at
 from ai_meterix.storage.base import Dataset, StorageReader, UsageQuery
 
 HOUR = timedelta(hours=1)
@@ -311,7 +313,8 @@ class CostEngine:
             local = r["provider"] == "local" or r["model"] in local_names
             source = "local" if local else "api"
             target = line(day, r["model"], source, "" if local else r["provider"])
-            price = _price_at(prices.get(r["model"], []), ts)
+            rows = prices.get(r["model"]) or prices.get(base_model(r["model"]), [])
+            price = price_at(rows, ts)
             tokens = _Tokens()
             tokens.add(r, price if price is not None and price.price_set else None)
             target.requests += tokens.requests
@@ -398,16 +401,6 @@ def _price_index(prices: Iterable[ModelPrice]) -> dict[str, list[ModelPrice]]:
     for price in prices:
         index[price.model].append(price)
     return index
-
-
-def _price_at(prices: list[ModelPrice], ts: datetime) -> ModelPrice | None:
-    found = None
-    for price in prices:
-        if price.valid_from <= ts and (price.valid_to is None or ts < price.valid_to):
-            found = price
-    if found is None and prices and all(p.valid_from > ts for p in prices):
-        found = min(prices, key=lambda p: p.valid_from)  # the first price has no start
-    return found
 
 
 __all__ = [

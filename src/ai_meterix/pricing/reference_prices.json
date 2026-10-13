@@ -1,0 +1,41 @@
+{
+  "checked": "2026-10-13",
+  "currency": "USD",
+  "unit": "per 1M tokens",
+  "notes": [
+    "Standard tier, short context, no batch, regional or fast-mode prices.",
+    "Anthropic cache_write is the 5-minute cache write price; Claude Haiku 5.5 prompts over 100K tokens cost more.",
+    "OpenAI prices are for prompts under its long-context threshold."
+  ],
+  "sources": {
+    "anthropic": "https://platform.claude.com/docs/en/about-claude/pricing",
+    "openai": "https://developers.openai.com/api/docs/pricing"
+  },
+  "models": [
+    {"provider": "anthropic", "model": "claude-fable-5-1", "input": "10", "output": "50", "cache_read": "0.25", "cache_write": "12.50"},
+    {"provider": "anthropic", "model": "claude-mythos-5-1", "input": "10", "output": "50", "cache_read": "0.25", "cache_write": "12.50"},
+    {"provider": "anthropic", "model": "claude-opus-5-5", "input": "4", "output": "20", "cache_read": "0.20", "cache_write": "5"},
+    {"provider": "anthropic", "model": "claude-sonnet-5-5", "input": "2", "output": "10", "cache_read": "0.10", "cache_write": "2.50"},
+    {"provider": "anthropic", "model": "claude-haiku-5-5", "input": "0.10", "output": "0.50", "cache_read": "0.01", "cache_write": "0.125"},
+    {"provider": "anthropic", "model": "claude-fable-5", "input": "10", "output": "50", "cache_read": "1", "cache_write": "12.50"},
+    {"provider": "anthropic", "model": "claude-mythos-5", "input": "10", "output": "50", "cache_read": "1", "cache_write": "12.50"},
+    {"provider": "anthropic", "model": "claude-opus-5", "input": "5", "output": "25", "cache_read": "0.50", "cache_write": "6.25"},
+    {"provider": "anthropic", "model": "claude-sonnet-5", "input": "2", "output": "10", "cache_read": "0.20", "cache_write": "2.50"},
+    {"provider": "anthropic", "model": "claude-opus-4-8", "input": "5", "output": "25", "cache_read": "0.50", "cache_write": "6.25"},
+    {"provider": "anthropic", "model": "claude-opus-4-7", "input": "5", "output": "25", "cache_read": "0.50", "cache_write": "6.25"},
+    {"provider": "anthropic", "model": "claude-opus-4-6", "input": "5", "output": "25", "cache_read": "0.50", "cache_write": "6.25"},
+    {"provider": "anthropic", "model": "claude-opus-4-5", "input": "5", "output": "25", "cache_read": "0.50", "cache_write": "6.25"},
+    {"provider": "anthropic", "model": "claude-opus-4-1", "input": "15", "output": "75", "cache_read": "1.50", "cache_write": "18.75"},
+    {"provider": "anthropic", "model": "claude-opus-4", "input": "15", "output": "75", "cache_read": "1.50", "cache_write": "18.75"},
+    {"provider": "anthropic", "model": "claude-sonnet-4-6", "input": "3", "output": "15", "cache_read": "0.30", "cache_write": "3.75"},
+    {"provider": "anthropic", "model": "claude-sonnet-4-5", "input": "3", "output": "15", "cache_read": "0.30", "cache_write": "3.75"},
+    {"provider": "anthropic", "model": "claude-sonnet-4", "input": "3", "output": "15", "cache_read": "0.30", "cache_write": "3.75"},
+    {"provider": "anthropic", "model": "claude-haiku-4-5", "input": "1", "output": "5", "cache_read": "0.10", "cache_write": "1.25"},
+    {"provider": "anthropic", "model": "claude-3-5-haiku", "input": "0.80", "output": "4", "cache_read": "0.08", "cache_write": "1"},
+    {"provider": "openai", "model": "gpt-6-astra", "input": "10", "output": "50", "cache_read": "1", "cache_write": "12.50"},
+    {"provider": "openai", "model": "gpt-6.1-sol", "input": "2", "output": "10", "cache_read": "0.10", "cache_write": "2.50"},
+    {"provider": "openai", "model": "gpt-6-luna", "input": "0.10", "output": "0.50", "cache_read": "0.01", "cache_write": "0.125"},
+    {"provider": "openai", "model": "chat-latest", "input": "5", "output": "30", "cache_read": "0.50", "cache_write": null},
+    {"provider": "openai", "model": "gpt-5.3-codex", "input": "1.75", "output": "14", "cache_read": "0.175", "cache_write": null}
+  ]
+}

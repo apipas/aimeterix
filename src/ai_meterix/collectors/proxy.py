@@ -48,6 +48,7 @@ from urllib.parse import urlsplit
 
 from ai_meterix.core.model import Caller, CallType, LlmCall
 from ai_meterix.core.timeutil import utc_now
+from ai_meterix.pricing.prices import ensure_price_row
 from ai_meterix.storage.base import StorageWriter
 
 from .agent import DATA_DIR, from_record, to_record
@@ -229,6 +230,7 @@ class Recorder:
         self._pending: list[LlmCall] = []
         self._callers: dict[str, Caller] = {}
         self._saved_callers: set[str] = set()
+        self._priced_models: set[str] = set()
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self.written = 0
@@ -288,7 +290,26 @@ class Recorder:
         self.last_error = None
         if not remaining:
             self.buffer_path.unlink(missing_ok=True)
+        self._ensure_prices(calls)
         return True
+
+    def _ensure_prices(self, calls: list[LlmCall]) -> None:
+        """Give models seen for the first time their default price row (record 0012 D3.7)."""
+        for call in calls:
+            if call.model in self._priced_models or self._storage is None:
+                continue
+            try:
+                ensure_price_row(
+                    self._storage,
+                    call.model,
+                    local=call.provider == "local",
+                    ts=call.ts,
+                    by="proxy",
+                )
+            except Exception as exc:  # the calls are saved; the row is retried next time
+                log.warning("cannot add a price row for %s: %s", call.model, exc)
+                return
+            self._priced_models.add(call.model)
 
     def _records(self) -> Iterable[dict[str, Any]]:
         with self._lock:
