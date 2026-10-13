@@ -360,6 +360,10 @@ def test_a_profile_in_another_currency_moves_to_usd(
     assert "give rate and fees in USD" in capsys.readouterr().err
     assert main(["profile", "set", "--url", url, "--rate", "0.33", "--fees", "11"]) == 0
     assert "0.33 USD/kWh" in capsys.readouterr().out
+    # the older EUR version stays in the history; usage is still in USD
+    assert main(["usage", "--url", url, "--from", "2026-10-05", "--by", "model"]) == 0
+    table = capsys.readouterr().out
+    assert "Cost USD" in table and "no cost profile" not in table
 
 
 def test_usage_shows_watt_hours(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

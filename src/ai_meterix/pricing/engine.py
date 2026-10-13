@@ -37,7 +37,7 @@ from decimal import Decimal
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from ai_meterix.core.model import CostProfile, FeeSpread, ModelPrice
+from ai_meterix.core.model import CURRENCY, CostProfile, FeeSpread, ModelPrice
 from ai_meterix.core.timeutil import ensure_utc
 from ai_meterix.pricing.prices import base_model, price_at
 from ai_meterix.storage.base import Dataset, StorageReader, UsageQuery
@@ -328,7 +328,8 @@ class CostEngine:
             if not local and (price is None or not price.price_set):
                 target.notes.add(PRICE_NOT_SET)
 
-        currency = currencies.pop() if len(currencies) == 1 else None
+        # money is in USD for now (record 0012); older versions may name another
+        currency = CURRENCY if currencies else None
         ordered = sorted(lines.values(), key=_order)
         return Statement(start, end, currency, str(self.tz), ordered)
 
