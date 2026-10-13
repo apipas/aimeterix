@@ -11,12 +11,36 @@ from __future__ import annotations
 
 import csv
 import io
+from datetime import date, datetime, time, timedelta, timezone, tzinfo
 from decimal import ROUND_HALF_UP, Decimal
 
 from ai_meterix.pricing.engine import ESTIMATE, PRICE_NOT_SET, TOKEN_FIELDS, Statement, UsageLine
 
 _HEAD = ("Requests", "Input", "Output", "Cache read", "Cache write", "Total", "Wh", "Cost")
 _MARKS = {PRICE_NOT_SET: "!", ESTIMATE: "~"}
+
+
+def period(
+    now: datetime,
+    tz: tzinfo,
+    since: date | None = None,
+    until: date | None = None,
+    last_s: float | None = None,
+) -> tuple[datetime, datetime]:
+    """The UTC window for local days ``since`` to ``until`` (default today), or the last seconds.
+
+    The end is never after ``now``. Shared by the CLI and the API so both
+    return the same numbers.
+    """
+    if last_s:
+        return now - timedelta(seconds=last_s), now
+    first = since or until or now.astimezone(tz).date()
+    last = until or first
+    if last < first:
+        raise ValueError("the end day is before the start day")
+    start = datetime.combine(first, time.min, tz).astimezone(timezone.utc)
+    end = datetime.combine(last + timedelta(days=1), time.min, tz).astimezone(timezone.utc)
+    return start, min(end, now)
 
 
 def _lines(statement: Statement, by: str) -> list[UsageLine]:

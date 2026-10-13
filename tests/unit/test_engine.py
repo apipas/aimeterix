@@ -357,7 +357,7 @@ def test_a_profile_in_another_currency_moves_to_usd(
     s.close()
     url = f"sqlite:///{tmp_path / 'meter.db'}"
     assert main(["profile", "set", "--url", url, "--pue", "1.1"]) == 2
-    assert "give --rate and --fees in USD" in capsys.readouterr().err
+    assert "give rate and fees in USD" in capsys.readouterr().err
     assert main(["profile", "set", "--url", url, "--rate", "0.33", "--fees", "11"]) == 0
     assert "0.33 USD/kWh" in capsys.readouterr().out
 

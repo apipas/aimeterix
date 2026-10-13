@@ -10,7 +10,7 @@ import signal
 import sys
 import threading
 from collections.abc import Sequence
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timezone
 
 from ai_meterix import __version__
 
@@ -180,20 +180,15 @@ def _usage(args: argparse.Namespace) -> int:
     from ai_meterix.core.errors import AiMeterixError
     from ai_meterix.pricing.engine import CostEngine, local_zone
 
-    from .usage import render_csv, render_table
+    from .usage import period, render_csv, render_table
 
     tz = local_zone()
     now = datetime.now(timezone.utc)
-    if args.last:
-        start, end = now - timedelta(seconds=args.last), now
-    else:
-        first = args.since or (args.until or now.astimezone(tz).date())
-        last = args.until or first
-        if last < first:
-            print("aimeterix usage: --to is before --from", file=sys.stderr)
-            return 2
-        start = datetime.combine(first, time.min, tz).astimezone(timezone.utc)
-        end = datetime.combine(last + timedelta(days=1), time.min, tz).astimezone(timezone.utc)
+    try:
+        start, end = period(now, tz, args.since, args.until, args.last)
+    except ValueError as exc:
+        print(f"aimeterix usage: {exc}", file=sys.stderr)
+        return 2
     try:
         from ai_meterix.storage import open_reader
 
@@ -220,11 +215,10 @@ def _usage(args: argparse.Namespace) -> int:
 
 def _profile(args: argparse.Namespace) -> int:
     import getpass
-    from decimal import Decimal, InvalidOperation
 
     from ai_meterix.core.config import load_config
     from ai_meterix.core.errors import AiMeterixError
-    from ai_meterix.core.model import CURRENCY, CostProfile, FeeSpread
+    from ai_meterix.pricing.profiles import set_profile
     from ai_meterix.storage import open_reader, open_writer
 
     url = args.url or load_config(args.config).storage.url
@@ -242,44 +236,24 @@ def _profile(args: argparse.Namespace) -> int:
             return 2
         current = storage.get_profile(host)
         if args.action == "set":
+            changes = {
+                "rate": args.rate,
+                "pue": args.pue,
+                "fees": args.fees,
+                "spread": args.spread,
+                "name": args.name,
+                "region": args.region,
+            }
             try:
-                changes = {
-                    name: Decimal(value)
-                    for name, value in (
-                        ("energy_rate_per_kwh", args.rate),
-                        ("pue", args.pue),
-                        ("fixed_fees_per_month", args.fees),
-                    )
-                    if value is not None
-                }
-            except InvalidOperation:
-                print("aimeterix profile: --rate, --pue and --fees take numbers", file=sys.stderr)
+                current = set_profile(
+                    storage,  # type: ignore[arg-type]
+                    host,
+                    changes,
+                    by=getpass.getuser(),
+                )
+            except ValueError as exc:
+                print(f"aimeterix profile: {exc}", file=sys.stderr)
                 return 2
-            if current is None and "energy_rate_per_kwh" not in changes:
-                print("aimeterix profile: the first profile needs --rate", file=sys.stderr)
-                return 2
-            if current is not None and current.currency != CURRENCY:
-                needed = ["--rate"] + (["--fees"] if current.fixed_fees_per_month else [])
-                missing = [n for n in needed if getattr(args, n[2:]) is None]
-                if missing:
-                    print(
-                        f"aimeterix profile: your profile is in {current.currency}, and AI Meterix "
-                        f"uses {CURRENCY} for now; give {' and '.join(missing)} in {CURRENCY}",
-                        file=sys.stderr,
-                    )
-                    return 2
-            base = current or CostProfile(host, "default", CURRENCY, Decimal(0))
-            profile = CostProfile(
-                host,
-                args.name or base.name,
-                CURRENCY,
-                changes.get("energy_rate_per_kwh", base.energy_rate_per_kwh),
-                region=args.region if args.region is not None else base.region,
-                pue=changes.get("pue", base.pue),
-                fixed_fees_per_month=changes.get("fixed_fees_per_month", base.fixed_fees_per_month),
-                fee_spread=FeeSpread(args.spread) if args.spread else base.fee_spread,
-            )
-            current = storage.save_profile(profile, by=getpass.getuser())  # type: ignore[attr-defined]
         history = storage.get_profile_history(host)
     except AiMeterixError as exc:
         print(f"aimeterix profile: {exc}", file=sys.stderr)
@@ -413,6 +387,91 @@ def _prices(args: argparse.Namespace) -> int:
     return 0
 
 
+def _serve(args: argparse.Namespace) -> int:
+    from ai_meterix.core.config import load_config
+    from ai_meterix.core.errors import AiMeterixError
+    from ai_meterix.pricing.engine import local_zone
+    from ai_meterix.storage import open_writer
+
+    from .api import serve
+    from .auth import defaults_unchanged, ensure_accounts
+
+    logging.basicConfig(
+        level=logging.DEBUG if args.verbose else logging.INFO,
+        format="%(asctime)s %(levelname)s %(message)s",
+    )
+    config = load_config(args.config)
+    url = args.url or config.storage.url
+    host = args.host or config.api.host
+    port = args.port or config.api.port
+    try:
+        storage = open_writer(url)
+        try:
+            storage.migrate()
+            created = ensure_accounts(storage)
+            unchanged = defaults_unchanged(storage)
+        finally:
+            storage.close()
+        server = serve(url, local_zone(), host=host, port=port)
+    except (AiMeterixError, ValueError, OSError) as exc:
+        print(f"aimeterix serve: {exc}", file=sys.stderr)
+        return 1
+    logger = logging.getLogger("ai_meterix.api")
+    if created:
+        logger.info("created accounts %s; each password is the account name", ", ".join(created))
+    if unchanged:
+        logger.info(
+            "%s must change the first password: log in, then POST /api/password "
+            "(or run `aimeterix password NAME`)",
+            " and ".join(unchanged),
+        )
+    logger.info("API on http://%s:%d/api; Ctrl-C to stop", host, server.server_address[1])
+    stop = threading.Event()
+    previous = {sig: signal.signal(sig, lambda *_: stop.set()) for sig in _STOP_SIGNALS}
+    thread = threading.Thread(target=server.serve_forever, name="aimeterix-api", daemon=True)
+    thread.start()
+    try:
+        stop.wait(args.duration)
+    finally:
+        server.shutdown()
+        server.server_close()
+        for sig, handler in previous.items():
+            signal.signal(sig, handler)
+    return 0
+
+
+def _password(args: argparse.Namespace) -> int:
+    import getpass
+
+    from ai_meterix.core.config import load_config
+    from ai_meterix.core.errors import AiMeterixError
+    from ai_meterix.storage import open_writer
+
+    from .auth import ensure_accounts, set_password
+
+    url = args.url or load_config(args.config).storage.url
+    first = getpass.getpass(f"new password for {args.name}: ")
+    if getpass.getpass("again: ") != first:
+        print("aimeterix password: the two passwords differ", file=sys.stderr)
+        return 2
+    try:
+        storage = open_writer(url)
+    except AiMeterixError as exc:
+        print(f"aimeterix password: {exc}", file=sys.stderr)
+        return 1
+    try:
+        storage.migrate()
+        ensure_accounts(storage)
+        set_password(storage, args.name, first)
+    except (AiMeterixError, ValueError) as exc:
+        print(f"aimeterix password: {exc}", file=sys.stderr)
+        return 2
+    finally:
+        storage.close()
+    print(f"password changed for {args.name}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="aimeterix",
@@ -520,6 +579,21 @@ def build_parser() -> argparse.ArgumentParser:
     prices.add_argument("--url", help="storage URL (default: from the config)")
     prices.add_argument("--config", help="path to aimeterix.yaml")
     prices.set_defaults(func=_prices)
+
+    serve = commands.add_parser("serve", help="run the localhost API with login (record 0013)")
+    serve.add_argument("--host", help="address to listen on (default 127.0.0.1)")
+    serve.add_argument("--port", type=int, help="port (default 8788)")
+    serve.add_argument("--for", dest="duration", type=duration, help="stop after this long")
+    serve.add_argument("--url", help="storage URL (default: from the config)")
+    serve.add_argument("--config", help="path to aimeterix.yaml")
+    serve.add_argument("-v", "--verbose", action="store_true", help="log every request")
+    serve.set_defaults(func=_serve)
+
+    password = commands.add_parser("password", help="set the password of the user or admin account")
+    password.add_argument("name", choices=("user", "admin"))
+    password.add_argument("--url", help="storage URL (default: from the config)")
+    password.add_argument("--config", help="path to aimeterix.yaml")
+    password.set_defaults(func=_password)
     return parser
 
 
