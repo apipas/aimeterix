@@ -141,7 +141,7 @@ def build(
     )
     s.save_profile(
         CostProfile(
-            "mac", "home", "EUR", D("0.30"), fixed_fees_per_month=D(fees), fee_spread=spread
+            "mac", "home", "USD", D("0.30"), fixed_fees_per_month=D(fees), fee_spread=spread
         ),
         by="admin",
     )
@@ -163,7 +163,7 @@ def build(
 def lines(storage: StorageWriter, hours: int = 2) -> dict[str, dict]:
     engine = CostEngine(storage, tz=UTC)
     st = engine.statement(H10, H10 + timedelta(hours=hours), now=H10 + timedelta(hours=hours))
-    assert st.currency == "EUR"
+    assert st.currency == "USD"
     return {line.model: line.as_dict() for line in st.by_model()}
 
 
@@ -316,7 +316,7 @@ def test_usage_command(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> No
     url = f"sqlite:///{tmp_path / 'meter.db'}"
     assert main(["usage", "--url", url, "--from", "2026-10-05", "--by", "model"]) == 0
     table = capsys.readouterr().out
-    assert "qwen" in table and "claude-x" in table and "Cost EUR" in table
+    assert "qwen" in table and "claude-x" in table and "Cost USD" in table
     assert main(["usage", "--url", url, "--from", "2026-10-05", "--csv", "-"]) == 0
     rows = capsys.readouterr().out.splitlines()
     assert rows[0].startswith("day,model,source,provider,requests,input_tokens")
@@ -338,13 +338,28 @@ def test_profile_command(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> 
     build(tmp_path).close()
     url = f"sqlite:///{tmp_path / 'meter.db'}"
     assert main(["profile", "--url", url]) == 0
-    assert "0.30 EUR/kWh" in capsys.readouterr().out
+    assert "0.30 USD/kWh" in capsys.readouterr().out
     assert main(["profile", "set", "--url", url, "--rate", "0.25", "--fees", "60"]) == 0
     out = capsys.readouterr().out
-    assert "version 2" in out and "0.25 EUR/kWh" in out and "60 EUR/month" in out
+    assert "version 2" in out and "0.25 USD/kWh" in out and "60 USD/month" in out
     assert main(["profile", "history", "--url", url]) == 0
     assert "v1" in capsys.readouterr().out
     assert main(["profile", "set", "--url", url, "--rate", "abc"]) == 2
+
+
+def test_a_profile_in_another_currency_moves_to_usd(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from ai_meterix.interfaces.cli import main
+
+    s = build(tmp_path)
+    s.save_profile(CostProfile("mac", "home", "EUR", D("0.30"), fixed_fees_per_month=D(10)), "a")
+    s.close()
+    url = f"sqlite:///{tmp_path / 'meter.db'}"
+    assert main(["profile", "set", "--url", url, "--pue", "1.1"]) == 2
+    assert "give --rate and --fees in USD" in capsys.readouterr().err
+    assert main(["profile", "set", "--url", url, "--rate", "0.33", "--fees", "11"]) == 0
+    assert "0.33 USD/kWh" in capsys.readouterr().out
 
 
 def test_usage_shows_watt_hours(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

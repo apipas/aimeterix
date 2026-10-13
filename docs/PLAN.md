@@ -234,7 +234,7 @@ Each phase lists its goal, the steps, the decisions to settle **before** we buil
 | # | Decision | Outcome |
 |---|---|---|
 | D3.1 | Scope | ✅ Operational only: energy + fixed fees + API tokens; no hardware cost |
-| D3.2 | Cost profile | ✅ Per host; rate/kWh, PUE (1.0), region, currency, fixed fees, fee spread (`calendar` default, or `uptime`); no FX; automatic version history, no user-entered dates |
+| D3.2 | Cost profile | ✅ Per host; rate/kWh, PUE (1.0), region, currency, fixed fees, fee spread (`calendar` default, or `uptime`); no FX; USD only in MVP-1 (custom currency later); automatic version history, no user-entered dates |
 | D3.3 | Where it lives | ✅ Database, per host; seeded from `init` |
 | D3.4 | Fixed fees and idle | ✅ Spread over real month hours; active hours to models by energy share; idle overhead shown |
 | D3.5 | Energy counted | ✅ Whole-device power if readable, else chip + overhead; × PUE |
@@ -343,6 +343,7 @@ Items we discussed and agreed to postpone. Each is reviewed again when its stage
 | Item | Target | From |
 |---|---|---|
 | Several machines writing to one database; collector API | MVP-2 | D2.3 |
+| Custom currency per profile (MVP-1 is USD only) | Later | D3.2 |
 | SDK wrapper (Python, then JS) | MVP-2 | D2.8 |
 | NVIDIA verified on real hardware; deep NVML metrics | MVP-2 / tier 2 | D2.7, record 0009 |
 | Host registry with tags; cloud instance tags | MVP-2 | Phase 2 review |
