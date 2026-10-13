@@ -12,7 +12,7 @@ AI Meterix is an open-source tool for teams running AI on their own GPUs, rented
 aimeterix doctor                 # what this machine can measure
 aimeterix agent                  # sample the hardware until Ctrl-C (--mock for a demo)
 aimeterix proxy --upstream http://127.0.0.1:8080   # meter a local llama.cpp server
-aimeterix profile set --rate 0.30 --currency EUR   # your energy price and fees
+aimeterix profile set --rate 0.33 --fees 0   # your energy price and fees, in USD
 aimeterix usage                  # tokens, Wh and cost per model and day
 aimeterix prices                 # price per 1M tokens for each model
 aimeterix prices apply-reference # copy the dated OpenAI/Anthropic list (see `prices reference`)

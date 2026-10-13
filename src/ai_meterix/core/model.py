@@ -54,6 +54,10 @@ class CallType(str, Enum):
     FILE = "file"
 
 
+CURRENCY = "USD"
+"""All money is in USD for now; a profile keeps a currency field for later."""
+
+
 class FeeSpread(str, Enum):
     CALENDAR = "calendar"
     UPTIME = "uptime"

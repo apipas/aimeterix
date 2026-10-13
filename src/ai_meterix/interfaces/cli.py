@@ -224,7 +224,7 @@ def _profile(args: argparse.Namespace) -> int:
 
     from ai_meterix.core.config import load_config
     from ai_meterix.core.errors import AiMeterixError
-    from ai_meterix.core.model import CostProfile, FeeSpread
+    from ai_meterix.core.model import CURRENCY, CostProfile, FeeSpread
     from ai_meterix.storage import open_reader, open_writer
 
     url = args.url or load_config(args.config).storage.url
@@ -258,11 +258,21 @@ def _profile(args: argparse.Namespace) -> int:
             if current is None and "energy_rate_per_kwh" not in changes:
                 print("aimeterix profile: the first profile needs --rate", file=sys.stderr)
                 return 2
-            base = current or CostProfile(host, "default", "USD", Decimal(0))
+            if current is not None and current.currency != CURRENCY:
+                needed = ["--rate"] + (["--fees"] if current.fixed_fees_per_month else [])
+                missing = [n for n in needed if getattr(args, n[2:]) is None]
+                if missing:
+                    print(
+                        f"aimeterix profile: your profile is in {current.currency}, and AI Meterix "
+                        f"uses {CURRENCY} for now; give {' and '.join(missing)} in {CURRENCY}",
+                        file=sys.stderr,
+                    )
+                    return 2
+            base = current or CostProfile(host, "default", CURRENCY, Decimal(0))
             profile = CostProfile(
                 host,
                 args.name or base.name,
-                args.currency or base.currency,
+                CURRENCY,
                 changes.get("energy_rate_per_kwh", base.energy_rate_per_kwh),
                 region=args.region if args.region is not None else base.region,
                 pue=changes.get("pue", base.pue),
@@ -471,10 +481,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     profile = commands.add_parser("profile", help="show or set this machine's cost profile")
     profile.add_argument("action", nargs="?", choices=("show", "set", "history"), default="show")
-    profile.add_argument("--rate", help="energy price per kWh, e.g. 0.30")
-    profile.add_argument("--currency", help="3-letter code, e.g. EUR (all prices use it)")
+    profile.add_argument("--rate", help="energy price per kWh in USD, e.g. 0.33")
     profile.add_argument("--pue", help="cooling and building overhead, 1.0 at home")
-    profile.add_argument("--fees", help="fixed running fees per month, e.g. 60")
+    profile.add_argument("--fees", help="fixed running fees per month in USD, e.g. 60")
     profile.add_argument("--spread", choices=("calendar", "uptime"), help="how fees are spread")
     profile.add_argument("--name", help="profile name, e.g. home-office")
     profile.add_argument("--region", help="label only, e.g. CZ")
@@ -506,7 +515,7 @@ def build_parser() -> argparse.ArgumentParser:
     prices.add_argument(
         "--ignore-currency",
         action="store_true",
-        help="apply-reference: use the list's USD numbers in your profile's currency",
+        help="apply-reference: use the USD numbers for a profile saved in another currency",
     )
     prices.add_argument("--url", help="storage URL (default: from the config)")
     prices.add_argument("--config", help="path to aimeterix.yaml")
