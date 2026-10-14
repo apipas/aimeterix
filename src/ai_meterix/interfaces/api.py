@@ -25,6 +25,9 @@ POST     /api/prices/apply-reference     admin  ``dry_run``
 GET      /api/profiles                   user   each machine's profile and history
 PUT      /api/profiles/<host>            admin  ``rate``, ``pue``, ``fees``, ``spread``,
                                                 ``name``, ``region``
+GET      /api/config                     user   live settings, with their versions
+GET      /api/config/history             user   change log, ``key`` optional
+PUT      /api/config/<key>               admin  ``value``, or ``reset: true``
 =======  ==============================  =====  ======================================
 """
 
@@ -44,8 +47,10 @@ from typing import Any
 from urllib.parse import parse_qs, unquote, urlsplit
 
 from ai_meterix.collectors.proxy import is_loopback
+from ai_meterix.core.config import Config
 from ai_meterix.core.errors import AiMeterixError
 from ai_meterix.core.model import CURRENCY, PriceSource, Role
+from ai_meterix.core.settings import LIVE, effective, live_values, reset_setting, set_setting
 from ai_meterix.pricing.engine import CostEngine, Statement
 from ai_meterix.pricing.prices import (
     apply_reference,
@@ -140,6 +145,7 @@ class ApiServer(ThreadingHTTPServer):
         sessions: Sessions | None = None,
         reader: Callable[[str], StorageReader] = open_reader,
         writer: Callable[[str], StorageWriter] = open_writer,
+        config: Config | None = None,
     ) -> None:
         if not is_loopback(address[0]):
             raise ValueError(
@@ -149,6 +155,7 @@ class ApiServer(ThreadingHTTPServer):
         self.storage_url = storage_url
         self.tz = tz
         self.sessions = sessions or Sessions()
+        self.config = config or Config()
         self._reader = reader
         self._writer = writer
         super().__init__(address, _Handler)
@@ -249,12 +256,15 @@ class _Handler(BaseHTTPRequestHandler):
             ("GET", "/api/prices/reference"): self.reference,
             ("POST", "/api/prices/apply-reference"): self.apply_reference,
             ("GET", "/api/profiles"): self.profiles,
+            ("GET", "/api/config"): self.settings,
+            ("GET", "/api/config/history"): self.setting_history,
         }
         if (method, path) in fixed:
             return fixed[(method, path)], None
         for prefix, handler in (
             ("/api/prices/", self.put_price),
             ("/api/profiles/", self.put_profile),
+            ("/api/config/", self.put_setting),
         ):
             if path.startswith(prefix) and len(path) > len(prefix):
                 if method != "PUT":
@@ -428,6 +438,44 @@ class _Handler(BaseHTTPRequestHandler):
             profile = set_profile(storage, host, body, by=session.name)
         return {"profile": profile_dict(profile)}
 
+    def settings(self, query: dict[str, str]) -> dict[str, Any]:
+        self._session()
+        with self.server.reader() as storage:
+            live, notes = effective(self.server.config, storage)
+            saved = storage.get_settings()
+        return {
+            "settings": [
+                {"key": key, "value": value, "version": saved[key].version if key in saved else 0}
+                for key, value in live_values(live).items()
+            ],
+            "notes": notes,
+        }
+
+    def setting_history(self, query: dict[str, str]) -> dict[str, Any]:
+        self._session()
+        key = query.get("key")
+        if key and key not in LIVE:
+            raise ApiError(404, f"no setting named {key!r}")
+        with self.server.reader() as storage:
+            changes = [c for c in storage.get_setting_changes(key) if c.key in LIVE]
+        return {"changes": changes}
+
+    def put_setting(self, query: dict[str, str], key: str) -> dict[str, Any]:
+        session = self._admin()
+        body = self._body()
+        if key not in LIVE:
+            raise ApiError(404, f"no setting named {key!r}")
+        with self.server.writer() as storage:
+            if body.get("reset"):
+                value = reset_setting(storage, self.server.config, key, by=session.name)
+            elif "value" in body:
+                value = set_setting(
+                    storage, self.server.config, key, body["value"], by=session.name
+                )
+            else:
+                raise ApiError(400, "send value, or reset: true")
+        return {"key": key, "value": value}
+
 
 def serve(
     storage_url: str,
@@ -436,9 +484,10 @@ def serve(
     host: str = "127.0.0.1",
     port: int = 8788,
     sessions: Sessions | None = None,
+    config: Config | None = None,
 ) -> ApiServer:
     """An API server bound to ``host:port``; call ``serve_forever`` to run it."""
-    return ApiServer((host, port), storage_url, tz, sessions)
+    return ApiServer((host, port), storage_url, tz, sessions, config=config)
 
 
 __all__ = ["ApiError", "ApiServer", "serve", "statement_dict"]

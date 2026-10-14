@@ -227,7 +227,7 @@ Each phase lists its goal, the steps, the decisions to settle **before** we buil
 3. **Token normalization** across providers (cached tokens subtracted where included in input; "—" when a runtime reports none). **S**
 4. **Cost calculation:** energy × PUE × rate + fixed fees over the month's real hours; split to active models by energy share; idle overhead line; API tokens × prices. From hourly rollup sums, exact decimals, local-time days, cache dropped on profile/price change. **M**
 5. **Usage statement:** per model and day: requests, input, output, cache read, cache write, totals, kWh, cost. CLI (`aimeterix usage`), CSV, localhost API. **M**
-6. **Localhost API with login** (`user` read, `admin` read+write; record 0013) and configuration editable in the database. **M**
+6. **Localhost API with login** (`user` read, `admin` read+write; record 0013) and configuration editable in the database. **M** Live settings: interval, retention, proxy routes and key allowlist; reloaded about every 60 s; CLI flags pin a setting for that run.
 7. Batch jobs and file uploads recorded (tokens "not metered yet"). **S**
 
 **Decisions** (all settled; records [0012](decisions/0012-cost-engine-operational.md), [0013](decisions/0013-config-in-database-and-api-access.md), [0014](decisions/0014-model-storage-collector-amendments.md))

@@ -196,3 +196,22 @@ def test_serve_and_password_commands(
         assert verify_password("new-admin-pass", admin.password_hash)
     finally:
         storage.close()
+
+
+def test_settings_are_read_by_all_and_changed_by_the_admin(api: ApiServer) -> None:
+    user, admin = ready(api, "user"), ready(api, "admin")
+    status, body = user.call("GET", "/api/config")
+    assert status == 200
+    values = {s["key"]: s["value"] for s in body["settings"]}
+    assert values["agent.interval_s"] == 10.0
+    assert user.call("PUT", "/api/config/agent.interval_s", {"value": 5})[0] == 403
+    assert admin.call("PUT", "/api/config/agent.interval_s", {"value": 0})[0] == 400
+    assert admin.call("PUT", "/api/config/storage.url", {"value": "x"})[0] == 404
+    assert admin.call("PUT", "/api/config/agent.interval_s", {})[0] == 400
+    status, body = admin.call("PUT", "/api/config/agent.interval_s", {"value": 5})
+    assert status == 200 and body["value"] == 5
+    status, body = user.call("GET", "/api/config/history?key=agent.interval_s")
+    assert [c["by"] for c in body["changes"]][-1] == "admin"
+    assert user.call("GET", "/api/config/history?key=nope")[0] == 404
+    status, body = admin.call("PUT", "/api/config/agent.interval_s", {"reset": True})
+    assert status == 200 and body["value"] == 10.0
