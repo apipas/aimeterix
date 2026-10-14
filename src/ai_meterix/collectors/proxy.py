@@ -126,7 +126,13 @@ class Router:
         self.upstreams = {name: url.rstrip("/") for name, url in upstreams.items()}
         self.default = default.rstrip("/") if default else None
 
+    def update(self, upstreams: Mapping[str, str], default: str | None) -> None:
+        """Swap the routes while serving (a live setting, record 0013)."""
+        self.upstreams = {name: url.rstrip("/") for name, url in upstreams.items()}
+        self.default = default.rstrip("/") if default else None
+
     def resolve(self, path: str) -> Route | None:
+        upstreams, default = self.upstreams, self.default
         app = None
         if path.startswith("/app/"):
             app, _, rest = path[len("/app/") :].partition("/")
@@ -134,10 +140,10 @@ class Router:
             app = app or None
         first, _, rest = path[1:].partition("/")
         name = first.split("?", 1)[0]
-        if name in self.upstreams:
-            return Route(name, self.upstreams[name], "/" + rest, app)
-        if self.default is not None:
-            return Route("default", self.default, path, app)
+        if name in upstreams:
+            return Route(name, upstreams[name], "/" + rest, app)
+        if default is not None:
+            return Route("default", default, path, app)
         return None
 
     def describe(self) -> list[str]:

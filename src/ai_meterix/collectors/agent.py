@@ -282,6 +282,16 @@ class Agent:
             log.info("burst mode over; back to %.0f s", self.interval_s)
         return self.interval_s
 
+    def set_interval(self, interval_s: float) -> None:
+        """Change the configured interval while running (a live setting, record 0013)."""
+        if not 1.0 <= interval_s <= MAX_INTERVAL_S:
+            raise ValueError("interval_s must be between 1 and 300 seconds")
+        self.base_interval_s = self.interval_s = interval_s
+        self.flush_s = max(self.flush_s, interval_s)
+        if hasattr(self.backend, "interval_s"):  # the mock backend steps by it
+            self.backend.interval_s = interval_s
+        log.info("sampling every %.0f s", interval_s)
+
     # --- one tick and one flush ---------------------------------------------------
 
     def tick(self) -> SampleBatch:

@@ -9,10 +9,16 @@ import re
 import signal
 import sys
 import threading
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import date, datetime, time, timezone
+from typing import TYPE_CHECKING
 
 from ai_meterix import __version__
+
+if TYPE_CHECKING:
+    from ai_meterix.core.config import Config
+    from ai_meterix.core.settings import SettingsWatcher
+    from ai_meterix.storage import StorageWriter
 
 
 def _doctor(args: argparse.Namespace) -> int:
@@ -40,22 +46,9 @@ def duration(text: str) -> float:
     return float(match.group(1)) * _UNITS[match.group(2) or "s"]
 
 
-def _agent(args: argparse.Namespace) -> int:
-    from ai_meterix.collectors.agent import Agent, open_backend
-    from ai_meterix.core.config import load_config
-    from ai_meterix.storage import StorageWriter, open_writer
+def _opener(config: Config) -> Callable[[], StorageWriter]:
+    from ai_meterix.storage import open_writer
 
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(asctime)s %(levelname)s %(message)s",
-    )
-    config = load_config(args.config)
-    interval = args.interval or config.agent.interval_s
-    try:
-        backend = open_backend(args.project, mock=args.mock, interval_s=interval)
-    except RuntimeError as exc:
-        print(f"aimeterix agent: {exc}", file=sys.stderr)
-        return 1
     url = config.storage.url
 
     def open_storage() -> StorageWriter:
@@ -63,11 +56,80 @@ def _agent(args: argparse.Namespace) -> int:
             return open_writer(url, busy_timeout_ms=config.storage.busy_timeout_ms)
         return open_writer(url)
 
+    return open_storage
+
+
+def _live(config: Config) -> tuple[Config, tuple[int, ...] | None]:
+    """``config`` with the live settings from the database (record 0013), seeding them
+    on first use. When the database cannot be read the file's values are used and
+    the settings watcher picks the database values up later."""
+    from ai_meterix.core.settings import effective, seed_settings, settings_version
+
+    logger = logging.getLogger("ai_meterix.settings")
     try:
-        agent = Agent(backend, open_storage, interval_s=interval, burst_s=args.burst or 0.0)
+        storage = _opener(config)()
+        try:
+            storage.migrate()
+            added = seed_settings(storage, config)
+            live, notes = effective(config, storage)
+            version = settings_version(storage)
+        finally:
+            storage.close()
+    except Exception as exc:
+        logger.warning("could not read the settings (%s); using the config file for now", exc)
+        return config, None
+    if added:
+        logger.info(
+            "saved %d settings in the database; change them with `aimeterix config`", len(added)
+        )
+    for note in notes:
+        logger.warning(note)
+    return live, version
+
+
+def _watch(
+    config: Config,
+    version: tuple[int, ...] | None,
+    apply: Callable[[Config, list[str]], None],
+    pinned: Sequence[str] = (),
+) -> SettingsWatcher:
+    from ai_meterix.core.settings import SettingsWatcher
+    from ai_meterix.storage import open_reader
+
+    watcher = SettingsWatcher(
+        lambda: open_reader(config.storage.url), config, apply, version=version, pinned=pinned
+    )
+    watcher.start()
+    return watcher
+
+
+def _agent(args: argparse.Namespace) -> int:
+    from ai_meterix.collectors.agent import Agent, open_backend
+    from ai_meterix.core.config import load_config
+
+    logging.basicConfig(
+        level=logging.DEBUG if args.verbose else logging.INFO,
+        format="%(asctime)s %(levelname)s %(message)s",
+    )
+    config, version = _live(load_config(args.config))
+    interval = args.interval or config.agent.interval_s
+    try:
+        backend = open_backend(args.project, mock=args.mock, interval_s=interval)
+    except RuntimeError as exc:
+        print(f"aimeterix agent: {exc}", file=sys.stderr)
+        return 1
+    try:
+        agent = Agent(backend, _opener(config), interval_s=interval, burst_s=args.burst or 0.0)
     except ValueError as exc:
         print(f"aimeterix agent: {exc}", file=sys.stderr)
         return 2
+
+    def apply(new: Config, changed: list[str]) -> None:
+        if "agent.interval_s" in changed:
+            agent.set_interval(new.agent.interval_s)
+
+    pinned = ["agent.interval_s"] if args.interval else []
+    watcher = _watch(config, version, apply, pinned)
     previous = {sig: signal.signal(sig, lambda *_: agent.stop()) for sig in _STOP_SIGNALS}
     burst = f", 1 s burst for {args.burst:.0f} s" if args.burst else ""
     logging.getLogger("ai_meterix.agent").info(
@@ -76,6 +138,7 @@ def _agent(args: argparse.Namespace) -> int:
     try:
         agent.run(args.duration)
     finally:
+        watcher.stop()
         for sig, handler in previous.items():
             signal.signal(sig, handler)
     print(
@@ -96,7 +159,6 @@ def _proxy(args: argparse.Namespace) -> int:
     from ai_meterix.collectors.proxy import Recorder, Router, key_hash, serve
     from ai_meterix.core.config import ProxyConfig, load_config
     from ai_meterix.core.errors import ConfigError
-    from ai_meterix.storage import StorageWriter, open_writer
 
     if args.hash_key:
         key = sys.stdin.readline().strip()
@@ -110,7 +172,7 @@ def _proxy(args: argparse.Namespace) -> int:
         format="%(asctime)s %(levelname)s %(message)s",
     )
     try:
-        config = load_config(args.config)
+        config, version = _live(load_config(args.config))
         settings = config.proxy.model_dump()
         settings["upstreams"] = {**settings["upstreams"], **dict(args.route or [])}
         if args.upstream:
@@ -121,15 +183,8 @@ def _proxy(args: argparse.Namespace) -> int:
     except (ConfigError, ValueError) as exc:
         print(f"aimeterix proxy: {exc}", file=sys.stderr)
         return 2
-    url = config.storage.url
-
-    def open_storage() -> StorageWriter:
-        if url.startswith("sqlite"):
-            return open_writer(url, busy_timeout_ms=config.storage.busy_timeout_ms)
-        return open_writer(url)
-
     router = Router(proxy_config.upstreams, proxy_config.default_upstream)
-    recorder = Recorder(open_storage)
+    recorder = Recorder(_opener(config))
     try:
         server = serve(
             router,
@@ -148,6 +203,28 @@ def _proxy(args: argparse.Namespace) -> int:
         logger.info("  %s%s", base, line)
     if proxy_config.allowed_key_hashes:
         logger.info("  forwarding only %d allowed API keys", len(proxy_config.allowed_key_hashes))
+
+    def apply(new: Config, changed: list[str]) -> None:
+        if {"proxy.upstreams", "proxy.default_upstream"} & set(changed):
+            try:
+                live = ProxyConfig.model_validate(
+                    {
+                        **new.proxy.model_dump(),
+                        "upstreams": {**new.proxy.upstreams, **dict(args.route or [])},
+                        "default_upstream": args.upstream or new.proxy.default_upstream,
+                    }
+                )
+            except ValueError as exc:
+                logger.warning("routes not changed: %s", exc)
+                return
+            router.update(live.upstreams, live.default_upstream)
+            for line in router.describe():
+                logger.info("  %s%s", base, line)
+        if "proxy.allowed_key_hashes" in changed:
+            server.allowed = frozenset(new.proxy.allowed_key_hashes)
+
+    pinned = ["proxy.default_upstream"] if args.upstream else []
+    watcher = _watch(config, version, apply, pinned)
     stop = threading.Event()
     previous = {sig: signal.signal(sig, lambda *_: stop.set()) for sig in _STOP_SIGNALS}
     recorder.start()
@@ -156,6 +233,7 @@ def _proxy(args: argparse.Namespace) -> int:
     try:
         stop.wait(args.duration)
     finally:
+        watcher.stop()
         server.shutdown()
         server.server_close()
         recorder.close()
@@ -390,6 +468,7 @@ def _prices(args: argparse.Namespace) -> int:
 def _serve(args: argparse.Namespace) -> int:
     from ai_meterix.core.config import load_config
     from ai_meterix.core.errors import AiMeterixError
+    from ai_meterix.core.settings import seed_settings
     from ai_meterix.pricing.engine import local_zone
     from ai_meterix.storage import open_writer
 
@@ -410,9 +489,10 @@ def _serve(args: argparse.Namespace) -> int:
             storage.migrate()
             created = ensure_accounts(storage)
             unchanged = defaults_unchanged(storage)
+            seed_settings(storage, config)
         finally:
             storage.close()
-        server = serve(url, local_zone(), host=host, port=port)
+        server = serve(url, local_zone(), host=host, port=port, config=config)
     except (AiMeterixError, ValueError, OSError) as exc:
         print(f"aimeterix serve: {exc}", file=sys.stderr)
         return 1
@@ -470,6 +550,98 @@ def _password(args: argparse.Namespace) -> int:
         storage.close()
     print(f"password changed for {args.name}")
     return 0
+
+
+def _config(args: argparse.Namespace) -> int:
+    import getpass
+
+    from ai_meterix.core.config import load_config
+    from ai_meterix.core.errors import AiMeterixError
+    from ai_meterix.core.settings import (
+        LIVE,
+        effective,
+        export_yaml,
+        live_values,
+        parse_value,
+        reset_setting,
+        seed_settings,
+        set_setting,
+    )
+    from ai_meterix.storage import open_writer
+
+    try:
+        config = load_config(args.config)
+        if args.url:
+            config = config.model_copy(
+                update={"storage": config.storage.model_copy(update={"url": args.url})}
+            )
+        storage = open_writer(config.storage.url)
+    except AiMeterixError as exc:
+        print(f"aimeterix config: {exc}", file=sys.stderr)
+        return 1
+    try:
+        storage.migrate()
+        seed_settings(storage, config)
+        if args.action in ("set", "reset"):
+            if not args.key or (args.action == "set" and args.value is None):
+                print(
+                    f"aimeterix config: {args.action} needs a setting name"
+                    + (" and a value" if args.action == "set" else ""),
+                    file=sys.stderr,
+                )
+                return 2
+            if args.action == "set":
+                value = set_setting(
+                    storage,
+                    config,
+                    args.key,
+                    parse_value(args.key, args.value),
+                    by=getpass.getuser(),
+                )
+            else:
+                value = reset_setting(storage, config, args.key, by=getpass.getuser())
+            print(f"{args.key} = {json.dumps(value)}")
+            print("the agent and proxy pick this up within a minute")
+            return 0
+        if args.action == "history":
+            if args.key and args.key not in LIVE:
+                print(f"aimeterix config: unknown setting {args.key!r}", file=sys.stderr)
+                return 2
+            changes = [c for c in storage.get_setting_changes(args.key) if c.key in LIVE]
+            for c in changes:
+                print(f"{c.ts:%Y-%m-%d %H:%M} UTC  {c.by:<6}  {c.key}  {c.old} -> {c.new}")
+            if not changes:
+                print("no changes yet")
+            return 0
+        live, notes = effective(config, storage)
+        if args.action == "export":
+            text = export_yaml(live)
+            if args.key and args.key != "-":
+                with open(args.key, "x", encoding="utf-8") as out:
+                    out.write(text)
+                print(f"wrote {args.key}")
+            else:
+                print(text, end="")
+            return 0
+        saved = storage.get_settings()
+        print("Live settings (in the database; change with `aimeterix config set KEY VALUE`)")
+        for key, value in live_values(live).items():
+            print(f"  {key:<30} {json.dumps(value)}  (version {saved[key].version})")
+        print("Bootstrap settings (config file or environment; need a restart)")
+        print(f"  {'storage.url':<30} {live.storage.url}")
+        print(f"  {'proxy':<30} {live.proxy.host}:{live.proxy.port}")
+        print(f"  {'api':<30} {live.api.host}:{live.api.port}")
+        for note in notes:
+            print(f"note: {note}")
+        return 0
+    except FileExistsError:
+        print(f"aimeterix config: {args.key} exists already", file=sys.stderr)
+        return 2
+    except (AiMeterixError, ValueError) as exc:
+        print(f"aimeterix config: {exc}", file=sys.stderr)
+        return 2
+    finally:
+        storage.close()
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -594,6 +766,18 @@ def build_parser() -> argparse.ArgumentParser:
     password.add_argument("--url", help="storage URL (default: from the config)")
     password.add_argument("--config", help="path to aimeterix.yaml")
     password.set_defaults(func=_password)
+
+    config = commands.add_parser(
+        "config", help="show or change the live settings in the database (record 0013)"
+    )
+    config.add_argument(
+        "action", nargs="?", choices=("show", "set", "reset", "history", "export"), default="show"
+    )
+    config.add_argument("key", nargs="?", help="setting name, e.g. agent.interval_s; export: FILE")
+    config.add_argument("value", nargs="?", help="new value: a number, text, null or JSON")
+    config.add_argument("--url", help="storage URL (default: from the config)")
+    config.add_argument("--config", help="path to aimeterix.yaml")
+    config.set_defaults(func=_config)
     return parser
 
 
