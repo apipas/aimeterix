@@ -154,7 +154,11 @@ def render_csv(statement: Statement, by: str = "day") -> str:
     for line in _lines(statement, by):
         d = line.as_dict()
         d["currency"] = statement.currency or ""
-        d["wh"] = line.kwh * 1000
+        # fixed decimals: 0.001 Wh, 0.000001 kWh and a millionth of the currency
+        d["wh"] = _money(line.kwh * 1000, "0.001")
+        d["kwh"] = _money(line.kwh, "0.000001")
+        for name in ("energy_cost", "fee_cost", "token_cost", "cost"):
+            d[name] = _money(d[name], "0.000001")
         d["notes"] = "; ".join(d["notes"])
         writer.writerow(["" if d[c] is None else d[c] for c in columns])
     return buffer.getvalue()
