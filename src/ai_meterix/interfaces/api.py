@@ -11,7 +11,7 @@ password, only ``POST /api/password`` and ``/api/logout`` answer.
 =======  ==============================  =====  ======================================
 Method   Path                            Role   What
 =======  ==============================  =====  ======================================
-GET      /api/health                     none   storage reachable, schema version
+GET      /api/health                     none   storage, schema, and `aimeterix health`
 POST     /api/login, /api/logout         none   start or end a session
 POST     /api/password                   any    change your password (``old``,
                                                 ``password``); admin: ``name`` too
@@ -286,9 +286,16 @@ class _Handler(BaseHTTPRequestHandler):
     # --- endpoints --------------------------------------------------------------
 
     def health(self, query: dict[str, str]) -> dict[str, Any]:
+        from .service import health
+
         with self.server.reader() as storage:
             status = storage.health()
-        return {"ok": status.ok, "storage": status.backend, "schema": status.schema_version}
+        return {
+            "ok": status.ok,
+            "storage": status.backend,
+            "schema": status.schema_version,
+            "setup": health(self.server.storage_url),  # same report as `aimeterix health`
+        }
 
     def login(self, query: dict[str, str]) -> dict[str, Any]:
         body = self._body()

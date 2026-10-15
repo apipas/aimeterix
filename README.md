@@ -18,6 +18,9 @@ aimeterix prices                 # price per 1M tokens for each model
 aimeterix prices apply-reference # copy the dated OpenAI/Anthropic list (see `prices reference`)
 aimeterix serve                  # JSON API on http://127.0.0.1:8788/api with login
 aimeterix config                 # live settings; `config set agent.interval_s 5`
+aimeterix start                  # agent, proxy and API in the background (logs in ~/.aimeterix/logs)
+aimeterix health                 # is everything running and measuring now? (exit code 1 if not)
+aimeterix stop                   # stop them; buffers are written first (--keep-proxy keeps apps working)
 ```
 
 The first start of the agent, proxy or API copies the live settings (sampling interval, retention, proxy routes and key allowlist) from `aimeterix.yaml` into the database. From then on the database wins: change them with `aimeterix config set KEY VALUE` or `PUT /api/config/<key>`, and the agent and proxy pick the change up within a minute, without a restart. `aimeterix config history` shows who changed what; `aimeterix config export FILE` writes the settings back to YAML. The database URL, addresses and ports, and secrets stay in the file or environment.

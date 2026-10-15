@@ -644,6 +644,94 @@ def _config(args: argparse.Namespace) -> int:
         storage.close()
 
 
+def _start(args: argparse.Namespace) -> int:
+    from ai_meterix.core.config import load_config
+    from ai_meterix.core.errors import ConfigError
+
+    from .service import SERVICES, start
+
+    try:
+        config = load_config(args.config)
+    except ConfigError as exc:
+        print(f"aimeterix start: {exc}", file=sys.stderr)
+        return 2
+    names = args.names or list(SERVICES)
+    ok = True
+    for name, started, message in start(names, config=args.config):
+        print(f"{name:<6} {message}")
+        ok = ok and started
+    if ok:
+        print(f"API and dashboard: http://{config.api.host}:{config.api.port}/api")
+        print(f"point apps at the proxy: http://{config.proxy.host}:{config.proxy.port}")
+        print("check with `aimeterix health`; stop with `aimeterix stop`")
+    return 0 if ok else 1
+
+
+def _stop(args: argparse.Namespace) -> int:
+    from ai_meterix.core.config import load_config
+    from ai_meterix.core.errors import ConfigError
+
+    from .service import SERVICES, port_in_use, stop
+
+    names = args.names or [n for n in SERVICES if not (args.keep_proxy and n == "proxy")]
+    ok = True
+    for name, stopped, message in stop(names):
+        print(f"{name:<6} {message}")
+        ok = ok and stopped
+    try:
+        config = load_config(args.config)
+    except ConfigError:
+        return 0 if ok else 1
+    ports = {
+        "proxy": (config.proxy.host, config.proxy.port),
+        "serve": (config.api.host, config.api.port),
+    }
+    for name in names:
+        if name in ports and port_in_use(*ports[name]):
+            print(f"{name:<6} port {ports[name][1]} is still in use by another program")
+            ok = False
+    return 0 if ok else 1
+
+
+def _health(args: argparse.Namespace) -> int:
+    from ai_meterix.core.config import load_config
+    from ai_meterix.core.errors import ConfigError
+
+    from .service import health
+
+    try:
+        config = load_config(args.config)
+    except ConfigError as exc:
+        print(f"aimeterix health: {exc}", file=sys.stderr)
+        return 2
+    report = health(args.url or config.storage.url)
+    if args.json:
+        print(json.dumps(report, indent=2, default=str))
+        return 0 if report["ok"] else 1
+    now = datetime.now(timezone.utc)
+
+    def age(ts: datetime | None) -> str:
+        if ts is None:
+            return "none in the last 6 h"
+        seconds = int((now - ts).total_seconds())
+        return f"{seconds // 60} min ago" if seconds >= 120 else "just now"
+
+    for p in report["processes"]:
+        if p["running"]:
+            up = p["uptime_s"] or 0
+            uptime = f"{up // 3600} h {up % 3600 // 60} min"
+            print(f"  {p['name']:<6} running   pid {p['pid']}, up {uptime}")
+        else:
+            print(f"  {p['name']:<6} stopped")
+    db = report["database"]
+    size = f", {db['size_bytes'] / 1e6:.1f} MB" if db["size_bytes"] else ""
+    print(f"  database {'ok' if db['ok'] else 'NOT OK'} ({db['backend'] or '-'}{size})")
+    print(f"  last hardware sample  {age(report['last_sample'])}")
+    print(f"  last proxied call     {age(report['last_call'])}")
+    print("healthy" if report["ok"] else "NOT healthy: " + "; ".join(report["problems"]))
+    return 0 if report["ok"] else 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="aimeterix",
@@ -778,6 +866,26 @@ def build_parser() -> argparse.ArgumentParser:
     config.add_argument("--url", help="storage URL (default: from the config)")
     config.add_argument("--config", help="path to aimeterix.yaml")
     config.set_defaults(func=_config)
+
+    names = ("agent", "proxy", "serve")
+    start = commands.add_parser("start", help="run the agent, proxy and API in the background")
+    start.add_argument("names", nargs="*", choices=names, help="only these (default all)")
+    start.add_argument("--config", help="path to aimeterix.yaml")
+    start.set_defaults(func=_start)
+
+    stop = commands.add_parser("stop", help="stop what `start` runs; buffers are written first")
+    stop.add_argument("names", nargs="*", choices=names, help="only these (default all)")
+    stop.add_argument(
+        "--keep-proxy", action="store_true", help="leave the proxy running for your apps"
+    )
+    stop.add_argument("--config", help="path to aimeterix.yaml")
+    stop.set_defaults(func=_stop)
+
+    health = commands.add_parser("health", help="is everything running and measuring now?")
+    health.add_argument("--json", action="store_true", help="print the report as JSON")
+    health.add_argument("--url", help="storage URL (default: from the config)")
+    health.add_argument("--config", help="path to aimeterix.yaml")
+    health.set_defaults(func=_health)
     return parser
 
 
