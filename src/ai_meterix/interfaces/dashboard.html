@@ -100,6 +100,15 @@ details summary { cursor: pointer; color: var(--ink-2); margin-top: 8px; }
 #help h3 { font-size: 15px; margin: 28px 0 6px; padding-top: 16px; border-top: 1px solid var(--grid); }
 #help .toc { columns: 2 220px; padding-left: 18px; margin: 12px 0 0; }
 #help a { color: var(--accent); }
+#help h4 { font-size: 14px; margin: 24px 0 4px; }
+#help h4 code { font-size: 14px; font-weight: 650; }
+#help .cmd { border-top: 1px dashed var(--grid); }
+#help pre.usage { white-space: pre-wrap; overflow-wrap: anywhere; }
+#help table.opts td:first-child { white-space: nowrap; width: 1%; }
+#help .ex-label { margin: 10px 0 0; color: var(--ink-2); font-weight: 600; font-size: 12px; }
+#help .cmd-index { line-height: 2; }
+#help .cmd-index a { text-decoration: none; }
+#help .cm { color: var(--muted); }
 #help dl { margin: 8px 0; }
 #help dt { font-weight: 600; margin-top: 8px; }
 #help dd { margin: 0 0 0 16px; color: var(--ink-2); }
@@ -231,9 +240,11 @@ pre code { background: none; border: 0; padding: 0; }
 
     <h3 id="h-start">Getting started</h3>
     <p>Run these in a terminal, in the project folder (with <code>uv run</code> in front if you use uv):</p>
-<pre><code>aimeterix start      # start the agent, proxy and API in the background
-aimeterix health     # check everything runs and measures (exit code 0 = healthy)
-aimeterix stop       # stop all three; data in memory is written first</code></pre>
+<pre><code>aimeterix doctor     <span class="cm"># once: what can this machine measure?</span>
+aimeterix profile set --rate 0.30   <span class="cm"># once: your electricity price per kWh</span>
+aimeterix start      <span class="cm"># start the agent, proxy and API in the background</span>
+aimeterix health     <span class="cm"># check everything runs and measures (exit code 0 = healthy)</span>
+aimeterix stop       <span class="cm"># stop all three; data in memory is written first</span></code></pre>
     <p>Then open this page at <code>127.0.0.1:8788</code> in your browser. Point your AI apps at the proxy (port <code>8787</code> on this machine by default; change the port with <code>AIMETERIX_PROXY_PORT</code>) instead of calling the model server directly, so their calls are counted. Logs are in <code>~/.aimeterix/logs</code>. The services keep running after you close the terminal, but not after a restart of the machine: run <code>aimeterix start</code> again.</p>
 
     <h3 id="h-parts">How it works</h3>
@@ -242,7 +253,12 @@ aimeterix stop       # stop all three; data in memory is written first</code></p
       <dt>proxy</dt><dd>Sits between your apps and the model server (local llama.cpp or a cloud API). It forwards each call unchanged and records the model and the token counts. It never stores prompts, answers or API keys.</dd>
       <dt>serve</dt><dd>The API and this dashboard. It only reads and computes; it changes nothing unless an admin asks it to.</dd>
     </dl>
-    <p>The three run as separate processes on purpose: if one stops, the proxy keeps forwarding, so your apps keep working. <code>aimeterix stop --keep-proxy</code> stops the other two and leaves the proxy running.</p>
+    <p><strong><code>aimeterix start</code> runs all three in the background with one command</strong>, which is what you normally want. You can also run any of them on its own:</p>
+    <ul>
+      <li>In the background: <code>aimeterix start proxy</code> (or <code>agent</code>, <code>serve</code>, or any two).</li>
+      <li>In the terminal, in the foreground, to watch its log: <code>aimeterix agent</code>, <code>aimeterix proxy</code> or <code>aimeterix serve</code>; stop it with Ctrl-C. Options given there, such as <code>--port</code> or <code>--interval</code>, apply to that run only.</li>
+    </ul>
+    <p>They are separate processes on purpose: if one stops, the proxy keeps forwarding, so your apps keep working. <code>aimeterix stop --keep-proxy</code> stops the other two and leaves the proxy running. Services started in the foreground show as stopped under <a href="#h-health">Is it measuring?</a>, because only <code>start</code> records them.</p>
 
     <h3 id="h-login">Accounts and sign-in</h3>
     <p>There are two accounts. <strong>user</strong> can see everything. <strong>admin</strong> can also change prices, the cost profile and settings through the API or the command line. On first sign-in the password is the account name and you must choose a new one. To reset a forgotten password, run <code>aimeterix password user</code> (or <code>admin</code>) on this machine.</p>
@@ -341,16 +357,132 @@ token cost  = tokens ÷ 1,000,000 × price per 1M tokens (per token type)</code>
     </dl>
 
     <h3 id="h-commands">Command reference</h3>
-<pre><code>aimeterix start | stop | health       run, stop and check the services
-aimeterix doctor                      what this machine can measure
-aimeterix usage --from 2026-10-01     usage and cost per model and day
-aimeterix usage --by model --csv out.csv
-aimeterix profile show | set --rate 0.30 --pue 1.0 --fees 0
-aimeterix prices list | set MODEL --input 3 --output 15
-aimeterix prices reference | apply-reference
-aimeterix config | set KEY VALUE | reset KEY | history KEY
-aimeterix password user | admin       set a password
-aimeterix COMMAND --help              all options of a command</code></pre>
+    <p>Every command and option. Type <code>aimeterix COMMAND --help</code> for the same list in the terminal, and <code>aimeterix --version</code> for the version. With uv, put <code>uv run</code> in front of each command. Times are written <code>90s</code>, <code>10m</code> or <code>2h</code>; days as <code>YYYY-MM-DD</code>.</p>
+    <p class="cmd-index"><a href="#c-start"><code>start</code></a>, <a href="#c-stop"><code>stop</code></a>, <a href="#c-health"><code>health</code></a>, <a href="#c-agent"><code>agent</code></a>, <a href="#c-proxy"><code>proxy</code></a>, <a href="#c-serve"><code>serve</code></a>, <a href="#c-doctor"><code>doctor</code></a>, <a href="#c-usage"><code>usage</code></a>, <a href="#c-profile"><code>profile</code></a>, <a href="#c-prices"><code>prices</code></a>, <a href="#c-config"><code>config</code></a>, <a href="#c-password"><code>password</code></a></p>
+    <p class="muted">Running: start, stop, health. Each service on its own: agent, proxy, serve. Checking: doctor, usage. Costs and settings: profile, prices, config, password.</p>
+    
+    <div class="cmd" id="c-start">
+      <h4><code>aimeterix start</code></h4>
+      <p>Starts the agent, proxy and API (serve) in the background, all three by default. They keep running after you close the terminal. Logs go to <code>~/.aimeterix/logs</code>. If one is already running it is left alone.</p>
+      <pre class="usage"><code>aimeterix start [agent] [proxy] [serve] [--config FILE]</code></pre>
+      <div class="scroll"><table class="opts"><tr><th>Option</th><th>What it does</th></tr><tr><td><code>agent proxy serve</code></td><td>Start only the ones you name. Default: all three.</td></tr><tr><td><code>--config FILE</code></td><td>Use this <code>aimeterix.yaml</code> instead of the default one.</td></tr></table></div>
+      <p class="ex-label">Examples</p>
+<pre><code>aimeterix start   <span class="cm"># everything</span>
+aimeterix start proxy   <span class="cm"># only the proxy</span>
+aimeterix start agent serve   <span class="cm"># measure and show, no proxy</span></code></pre>
+    </div>
+    <div class="cmd" id="c-stop">
+      <h4><code>aimeterix stop</code></h4>
+      <p>Stops what <code>start</code> started. The agent and proxy write the data they hold in memory first. It then checks nothing is left running.</p>
+      <pre class="usage"><code>aimeterix stop [agent] [proxy] [serve] [--keep-proxy] [--config FILE]</code></pre>
+      <div class="scroll"><table class="opts"><tr><th>Option</th><th>What it does</th></tr><tr><td><code>agent proxy serve</code></td><td>Stop only the ones you name. Default: all three.</td></tr><tr><td><code>--keep-proxy</code></td><td>Stop the others but leave the proxy running, so your apps keep working.</td></tr><tr><td><code>--config FILE</code></td><td>Use this <code>aimeterix.yaml</code> instead of the default one.</td></tr></table></div>
+      <p class="ex-label">Examples</p>
+<pre><code>aimeterix stop   <span class="cm"># everything</span>
+aimeterix stop --keep-proxy   <span class="cm"># apps keep working</span>
+aimeterix stop serve   <span class="cm"># only the API and dashboard</span></code></pre>
+    </div>
+    <div class="cmd" id="c-health">
+      <h4><code>aimeterix health</code></h4>
+      <p>Is everything running and measuring right now? Shows each service, the database, and the age of the newest sample and call. Exit code 0 when healthy, 1 when not, so scripts can use it.</p>
+      <pre class="usage"><code>aimeterix health [--json] [--url URL] [--config FILE]</code></pre>
+      <div class="scroll"><table class="opts"><tr><th>Option</th><th>What it does</th></tr><tr><td><code>--json</code></td><td>Print the report as JSON.</td></tr><tr><td><code>--url URL</code></td><td>Use this database instead of the one in the config, e.g. <code>sqlite:///data/meter.db</code>.</td></tr><tr><td><code>--config FILE</code></td><td>Use this <code>aimeterix.yaml</code> instead of the default one.</td></tr></table></div>
+      <p class="ex-label">Examples</p>
+<pre><code>aimeterix health
+aimeterix health --json   <span class="cm"># for scripts and monitoring</span>
+aimeterix health || aimeterix start   <span class="cm"># restart if something is down</span></code></pre>
+    </div>
+    <div class="cmd" id="c-agent">
+      <h4><code>aimeterix agent</code></h4>
+      <p>Runs the measuring agent in this terminal (in the foreground) until you press Ctrl-C. <code>start</code> runs the same thing in the background.</p>
+      <pre class="usage"><code>aimeterix agent [--interval SEC] [--burst TIME] [--for TIME] [--project NAME] [--mock] [--config FILE] [-v]</code></pre>
+      <div class="scroll"><table class="opts"><tr><th>Option</th><th>What it does</th></tr><tr><td><code>--interval SEC</code></td><td>Seconds between samples, 1 to 300 (default from the live setting <code>agent.interval_s</code>, 10). Given here, it wins over the setting for this run.</td></tr><tr><td><code>--burst TIME</code></td><td>First sample every second for this long, then fall back to the interval.</td></tr><tr><td><code>--for TIME</code></td><td>Stop by itself after this long: <code>90s</code>, <code>10m</code>, <code>2h</code>. Handy for tests.</td></tr><tr><td><code>--project NAME</code></td><td>Label this machine with a project name.</td></tr><tr><td><code>--mock</code></td><td>Invent readings instead of measuring, for a demo.</td></tr><tr><td><code>--config FILE</code></td><td>Use this <code>aimeterix.yaml</code> instead of the default one.</td></tr><tr><td><code>-v, --verbose</code></td><td>Log more detail.</td></tr></table></div>
+      <p class="ex-label">Examples</p>
+<pre><code>aimeterix agent
+aimeterix agent --interval 5 -v   <span class="cm"># every 5 s, more logging</span>
+aimeterix agent --burst 2m --for 10m   <span class="cm"># short detailed test</span></code></pre>
+    </div>
+    <div class="cmd" id="c-proxy">
+      <h4><code>aimeterix proxy</code></h4>
+      <p>Runs the proxy in this terminal until Ctrl-C. Your apps call it instead of the model server; it forwards each call unchanged and records the model and token counts.</p>
+      <pre class="usage"><code>aimeterix proxy [--port PORT] [--upstream URL] [--route NAME=URL] [--for TIME] [--hash-key] [--config FILE] [-v]</code></pre>
+      <div class="scroll"><table class="opts"><tr><th>Option</th><th>What it does</th></tr><tr><td><code>--port PORT</code></td><td>Port on 127.0.0.1 to listen on (default 8787, or <code>AIMETERIX_PROXY_PORT</code>).</td></tr><tr><td><code>--upstream URL</code></td><td>Where calls without a route name go, usually your local model server. Wins over the live setting <code>proxy.default_upstream</code> for this run.</td></tr><tr><td><code>--route NAME=URL</code></td><td>Send <code>/NAME/...</code> to URL. Repeat for more routes.</td></tr><tr><td><code>--for TIME</code></td><td>Stop by itself after this long: <code>90s</code>, <code>10m</code>, <code>2h</code>. Handy for tests.</td></tr><tr><td><code>--hash-key</code></td><td>Read an API key from the keyboard and print its hash, for <code>proxy.allowed_key_hashes</code>. The key itself is never stored.</td></tr><tr><td><code>--config FILE</code></td><td>Use this <code>aimeterix.yaml</code> instead of the default one.</td></tr><tr><td><code>-v, --verbose</code></td><td>Log the counts of every call.</td></tr></table></div>
+      <p class="ex-label">Examples</p>
+<pre><code>aimeterix proxy --port 8080 --upstream http://127.0.0.1:8081   <span class="cm"># llama.cpp on 8081</span>
+aimeterix proxy --route openai=https://api.openai.com   <span class="cm"># apps call /openai/v1/...</span>
+aimeterix proxy --hash-key   <span class="cm"># then paste the key</span></code></pre>
+    </div>
+    <div class="cmd" id="c-serve">
+      <h4><code>aimeterix serve</code></h4>
+      <p>Runs the API and this dashboard in this terminal until Ctrl-C. First run creates the accounts <code>user</code> and <code>admin</code>.</p>
+      <pre class="usage"><code>aimeterix serve [--host ADDR] [--port PORT] [--for TIME] [--url URL] [--config FILE] [-v]</code></pre>
+      <div class="scroll"><table class="opts"><tr><th>Option</th><th>What it does</th></tr><tr><td><code>--host ADDR</code></td><td>Address to listen on (default 127.0.0.1, this machine only).</td></tr><tr><td><code>--port PORT</code></td><td>Port (default 8788).</td></tr><tr><td><code>--for TIME</code></td><td>Stop by itself after this long: <code>90s</code>, <code>10m</code>, <code>2h</code>. Handy for tests.</td></tr><tr><td><code>--url URL</code></td><td>Use this database instead of the one in the config, e.g. <code>sqlite:///data/meter.db</code>.</td></tr><tr><td><code>--config FILE</code></td><td>Use this <code>aimeterix.yaml</code> instead of the default one.</td></tr><tr><td><code>-v, --verbose</code></td><td>Log every request.</td></tr></table></div>
+      <p class="ex-label">Examples</p>
+<pre><code>aimeterix serve   <span class="cm"># dashboard on 127.0.0.1:8788</span>
+aimeterix serve --port 9000</code></pre>
+    </div>
+    <div class="cmd" id="c-doctor">
+      <h4><code>aimeterix doctor</code></h4>
+      <p>Shows what this machine can measure: chip, sensors, power, GPU, and anything missing. Run it first on a new machine. It changes nothing.</p>
+      <pre class="usage"><code>aimeterix doctor [--json] [--readings]</code></pre>
+      <div class="scroll"><table class="opts"><tr><th>Option</th><th>What it does</th></tr><tr><td><code>--json</code></td><td>Print the report as JSON.</td></tr><tr><td><code>--readings</code></td><td>With <code>--json</code>, include the raw readings (no process names).</td></tr></table></div>
+      <p class="ex-label">Examples</p>
+<pre><code>aimeterix doctor
+aimeterix doctor --json --readings</code></pre>
+    </div>
+    <div class="cmd" id="c-usage">
+      <h4><code>aimeterix usage</code></h4>
+      <p>Tokens, energy and cost per model and day, the same numbers as the dashboard.</p>
+      <pre class="usage"><code>aimeterix usage [--from DAY] [--to DAY] [--last TIME] [--by day|model] [--csv FILE] [--url URL] [--config FILE]</code></pre>
+      <div class="scroll"><table class="opts"><tr><th>Option</th><th>What it does</th></tr><tr><td><code>--from DAY</code></td><td>First local day, <code>YYYY-MM-DD</code> (default today).</td></tr><tr><td><code>--to DAY</code></td><td>Last local day, included (default: the same day as <code>--from</code>, so one day).</td></tr><tr><td><code>--last TIME</code></td><td>Instead of days: the last <code>24h</code>, <code>90m</code>, ...</td></tr><tr><td><code>--by day|model</code></td><td>One row per model and day (default), or one per model for the whole range.</td></tr><tr><td><code>--csv FILE</code></td><td>Write CSV to FILE instead of a table. <code>-</code> prints it on screen.</td></tr><tr><td><code>--url URL</code></td><td>Use this database instead of the one in the config, e.g. <code>sqlite:///data/meter.db</code>.</td></tr><tr><td><code>--config FILE</code></td><td>Use this <code>aimeterix.yaml</code> instead of the default one.</td></tr></table></div>
+      <p class="ex-label">Examples</p>
+<pre><code>aimeterix usage   <span class="cm"># today</span>
+aimeterix usage --from 2026-10-01 --to 2026-10-31 --by model   <span class="cm"># one month per model</span>
+aimeterix usage --last 24h
+aimeterix usage --from 2026-10-01 --to 2026-10-31 --csv october.csv   <span class="cm"># for a spreadsheet</span></code></pre>
+    </div>
+    <div class="cmd" id="c-profile">
+      <h4><code>aimeterix profile</code></h4>
+      <p>Shows or sets this machine's cost profile: electricity rate, PUE and fixed fees. Each change is a new version that applies from when it is saved.</p>
+      <pre class="usage"><code>aimeterix profile [show|set|history] [--rate N] [--pue N] [--fees N] [--spread calendar|uptime] [--name TEXT] [--region TEXT] [--host ID] [--url URL] [--config FILE]</code></pre>
+      <div class="scroll"><table class="opts"><tr><th>Option</th><th>What it does</th></tr><tr><td><code>show</code></td><td>Show the current profile (default).</td></tr><tr><td><code>set</code></td><td>Save a new version with the options given; the others stay as they were.</td></tr><tr><td><code>history</code></td><td>List every version.</td></tr><tr><td><code>--rate N</code></td><td>Electricity price per kWh in USD, e.g. <code>0.30</code>.</td></tr><tr><td><code>--pue N</code></td><td>Cooling and building overhead: 1.0 at home, 1.2 to 1.6 in a data center.</td></tr><tr><td><code>--fees N</code></td><td>Fixed running fees per month in USD (rent, internet, hardware lease), e.g. <code>60</code>.</td></tr><tr><td><code>--spread calendar|uptime</code></td><td>Spread fees over every hour of the month (<code>calendar</code>) or only the hours the machine ran (<code>uptime</code>).</td></tr><tr><td><code>--name TEXT</code></td><td>Profile name, e.g. <code>home-office</code>.</td></tr><tr><td><code>--region TEXT</code></td><td>A label only, e.g. <code>CZ</code>.</td></tr><tr><td><code>--host ID</code></td><td>Which machine, when the database has more than one.</td></tr><tr><td><code>--url URL</code></td><td>Use this database instead of the one in the config, e.g. <code>sqlite:///data/meter.db</code>.</td></tr><tr><td><code>--config FILE</code></td><td>Use this <code>aimeterix.yaml</code> instead of the default one.</td></tr></table></div>
+      <p class="ex-label">Examples</p>
+<pre><code>aimeterix profile
+aimeterix profile set --rate 0.30 --pue 1.0 --fees 0   <span class="cm"># home machine</span>
+aimeterix profile history</code></pre>
+    </div>
+    <div class="cmd" id="c-prices">
+      <h4><code>aimeterix prices</code></h4>
+      <p>Shows or sets what each model costs per 1M tokens, in USD. Local models have no token price; their cost is their energy.</p>
+      <pre class="usage"><code>aimeterix prices [list|set|history|reference|apply-reference] [MODEL] [--input N] [--output N] [--cache-read N] [--cache-write N] [--from DAY] [--local] [--dry-run] [--ignore-currency] [--url URL] [--config FILE]</code></pre>
+      <div class="scroll"><table class="opts"><tr><th>Option</th><th>What it does</th></tr><tr><td><code>list</code></td><td>Show the current price of every model seen (default).</td></tr><tr><td><code>set MODEL</code></td><td>Set or correct a model's price. Without <code>--from</code> it corrects the current price everywhere it applies.</td></tr><tr><td><code>history MODEL</code></td><td>Every change to a model's price, with who and when.</td></tr><tr><td><code>reference</code></td><td>Show the built-in list of public prices.</td></tr><tr><td><code>apply-reference</code></td><td>Copy the built-in prices into your table. Models with no price get one; prices you set yourself start a new period today, so earlier days keep theirs.</td></tr><tr><td><code>--input N</code></td><td>Price per 1M input tokens.</td></tr><tr><td><code>--output N</code></td><td>Price per 1M output tokens.</td></tr><tr><td><code>--cache-read N</code></td><td>Price per 1M tokens read from the prompt cache.</td></tr><tr><td><code>--cache-write N</code></td><td>Price per 1M tokens written to the prompt cache.</td></tr><tr><td><code>--from DAY</code></td><td>Start the new price on this local day; earlier days keep the old price.</td></tr><tr><td><code>--local</code></td><td>This model runs on this machine (no token price).</td></tr><tr><td><code>--dry-run</code></td><td>With <code>apply-reference</code>: only show what would change.</td></tr><tr><td><code>--ignore-currency</code></td><td>With <code>apply-reference</code>: use the USD prices even if your profile uses another currency.</td></tr><tr><td><code>--url URL</code></td><td>Use this database instead of the one in the config, e.g. <code>sqlite:///data/meter.db</code>.</td></tr><tr><td><code>--config FILE</code></td><td>Use this <code>aimeterix.yaml</code> instead of the default one.</td></tr></table></div>
+      <p class="ex-label">Examples</p>
+<pre><code>aimeterix prices
+aimeterix prices set gpt-6-luna --input 0.10 --output 0.40
+aimeterix prices set gpt-6-luna --output 0.50 --from 2026-11-01   <span class="cm"># price rise from November</span>
+aimeterix prices set qwen3.5-35b-a3b --local
+aimeterix prices apply-reference --dry-run   <span class="cm"># preview first</span></code></pre>
+    </div>
+    <div class="cmd" id="c-config">
+      <h4><code>aimeterix config</code></h4>
+      <p>Shows or changes the live settings stored in the database. The running services pick up a change within about a minute; no restart needed. Every change is logged.</p>
+      <pre class="usage"><code>aimeterix config [show|set|reset|history|export] [KEY|FILE] [VALUE] [--url URL] [--config FILE]</code></pre>
+      <p>The keys are listed under <a href="#h-settings">Prices, profile and settings</a>.</p><div class="scroll"><table class="opts"><tr><th>Option</th><th>What it does</th></tr><tr><td><code>show</code></td><td>Every live setting and where its value comes from (default).</td></tr><tr><td><code>set KEY VALUE</code></td><td>Change one. VALUE is a number, text, <code>null</code> or JSON.</td></tr><tr><td><code>reset KEY</code></td><td>Put one back to its built-in default.</td></tr><tr><td><code>history KEY</code></td><td>Every change, with who and when.</td></tr><tr><td><code>export FILE</code></td><td>Write the whole configuration as YAML, without passwords. Never overwrites a file.</td></tr><tr><td><code>--url URL</code></td><td>Use this database instead of the one in the config, e.g. <code>sqlite:///data/meter.db</code>.</td></tr><tr><td><code>--config FILE</code></td><td>Use this <code>aimeterix.yaml</code> instead of the default one.</td></tr></table></div>
+      <p class="ex-label">Examples</p>
+<pre><code>aimeterix config
+aimeterix config set agent.interval_s 5
+aimeterix config set proxy.default_upstream http://127.0.0.1:8081
+aimeterix config set proxy.upstreams &#x27;{&quot;openai&quot;: &quot;https://api.openai.com&quot;}&#x27;
+aimeterix config reset agent.interval_s
+aimeterix config export backup.yaml</code></pre>
+    </div>
+    <div class="cmd" id="c-password">
+      <h4><code>aimeterix password</code></h4>
+      <p>Sets the password of the <code>user</code> or <code>admin</code> account. Use it when a password is forgotten; it asks for the new one twice.</p>
+      <pre class="usage"><code>aimeterix password user|admin [--url URL] [--config FILE]</code></pre>
+      <div class="scroll"><table class="opts"><tr><th>Option</th><th>What it does</th></tr><tr><td><code>user | admin</code></td><td>Which account.</td></tr><tr><td><code>--url URL</code></td><td>Use this database instead of the one in the config, e.g. <code>sqlite:///data/meter.db</code>.</td></tr><tr><td><code>--config FILE</code></td><td>Use this <code>aimeterix.yaml</code> instead of the default one.</td></tr></table></div>
+      <p class="ex-label">Examples</p>
+<pre><code>aimeterix password admin</code></pre>
+    </div>
     <p><button id="help-close-2">Back to the dashboard</button></p>
   </section>
 </main>
