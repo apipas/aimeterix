@@ -1,6 +1,8 @@
 """Record 0017 guarantees, tested (PLAN.md Phase 2 step 1e).
 
-- No code path uses sudo or starts other programs.
+- No code path uses sudo or starts other programs. The one exception is
+  ``aimeterix start`` / ``stop`` (``interfaces/service.py``), which start and
+  stop AI Meterix's own processes and ask ``ps`` whether a PID is still ours.
 - Nothing is written outside ``~/.aimeterix/``.
 - Servers listen on 127.0.0.1 only; the only connections go to this machine
   or, for the proxy, to the provider the user chose.
@@ -37,6 +39,7 @@ SRC = Path(__file__).parents[2] / "src" / "ai_meterix"
 # --- the code itself ------------------------------------------------------------------
 
 _BANNED_MODULES = {"subprocess", "pty", "multiprocessing"}
+_LAUNCHER = Path("interfaces/service.py")  # start / stop: our own processes only
 _BANNED_OS = ("system", "popen", "exec", "spawn", "posix_spawn", "fork", "kill", "setpriority")
 
 
@@ -60,7 +63,10 @@ def test_no_code_uses_sudo_or_starts_programs() -> None:
     for path, tree in _sources():
         where = path.relative_to(SRC)
         docs = _docstrings(tree)
+        launcher = where == _LAUNCHER
         for node in ast.walk(tree):
+            if launcher and not isinstance(node, ast.Constant):
+                continue
             if isinstance(node, ast.Import | ast.ImportFrom):
                 names = [a.name for a in node.names] if isinstance(node, ast.Import) else []
                 names.append(getattr(node, "module", None) or "")
@@ -282,3 +288,17 @@ def test_model_status_is_asked_on_this_machine_only() -> None:
     for url in ("http://example.com:11434/api/ps", "http://10.0.0.2:8080/props"):
         with pytest.raises(ValueError):
             local_fetch(url)
+
+
+def test_the_launcher_starts_only_ai_meterix() -> None:
+    source = (SRC / _LAUNCHER).read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    commands = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr in ("Popen", "run")
+    ]
+    assert len(commands) == 2  # the service itself, and `ps` to check a PID
+    assert '"-m", "ai_meterix.interfaces.cli"' in source and '["ps", "-ww"' in source
