@@ -21,6 +21,7 @@ One file per decision, numbered in order. A changed decision gets a new record t
 | [0015](0015-advisor-and-forecast.md) | Advisor and forecast: always on demand from the user's filters, separate read-only modules, rules R1–R6, budgets, in MVP-1 | accepted; budget delivery moved to MVP-2 by 0016 |
 | [0016](0016-interfaces-mvp1.md) | Interfaces in MVP-1: init from config with confirmation, `start` / `stop` / `health`, read-only dashboard on the API, advice on request; reports, alerts and services in MVP-2 | accepted |
 | [0017](0017-footprint-and-safety.md) | Footprint and safety: no sudo, observe only, nothing installed system-wide, localhost only, performance budget, verified `stop`, `uninstall --purge` | accepted |
+| [0018](0018-providers-and-models.md) | Providers as records (address, kind, models and prices); ten built in; any provider can be added; no price means cost 0 | accepted |
 
 ## Template
 

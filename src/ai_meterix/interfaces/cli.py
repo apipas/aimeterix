@@ -17,6 +17,7 @@ from ai_meterix import __version__
 
 if TYPE_CHECKING:
     from ai_meterix.core.config import Config
+    from ai_meterix.core.model import Provider
     from ai_meterix.core.settings import SettingsWatcher
     from ai_meterix.storage import StorageWriter
 
@@ -87,11 +88,25 @@ def _live(config: Config) -> tuple[Config, tuple[int, ...] | None]:
     return live, version
 
 
+def _read_providers(config: Config) -> list[Provider] | None:
+    """The providers in the database, or None when it cannot be read."""
+    try:
+        storage = _opener(config)()
+        try:
+            return storage.get_providers()
+        finally:
+            storage.close()
+    except Exception as exc:
+        logging.getLogger("ai_meterix.settings").warning("could not read the providers: %s", exc)
+        return None
+
+
 def _watch(
     config: Config,
     version: tuple[int, ...] | None,
     apply: Callable[[Config, list[str]], None],
     pinned: Sequence[str] = (),
+    providers: list[Provider] | None = None,
 ) -> SettingsWatcher:
     from ai_meterix.core.settings import SettingsWatcher
     from ai_meterix.storage import open_reader
@@ -99,6 +114,7 @@ def _watch(
     watcher = SettingsWatcher(
         lambda: open_reader(config.storage.url), config, apply, version=version, pinned=pinned
     )
+    watcher.providers = providers
     watcher.start()
     return watcher
 
@@ -159,6 +175,7 @@ def _proxy(args: argparse.Namespace) -> int:
     from ai_meterix.collectors.proxy import Recorder, Router, key_hash, serve
     from ai_meterix.core.config import ProxyConfig, load_config
     from ai_meterix.core.errors import ConfigError
+    from ai_meterix.pricing.providers import local_names, routes
 
     if args.hash_key:
         key = sys.stdin.readline().strip()
@@ -173,8 +190,12 @@ def _proxy(args: argparse.Namespace) -> int:
     )
     try:
         config, version = _live(load_config(args.config))
+        providers = _read_providers(config)
         settings = config.proxy.model_dump()
-        settings["upstreams"] = {**settings["upstreams"], **dict(args.route or [])}
+        settings["upstreams"] = {
+            **(routes(providers) if providers is not None else settings["upstreams"]),
+            **dict(args.route or []),
+        }
         if args.upstream:
             settings["default_upstream"] = args.upstream
         if args.port:
@@ -185,6 +206,7 @@ def _proxy(args: argparse.Namespace) -> int:
         return 2
     router = Router(proxy_config.upstreams, proxy_config.default_upstream)
     recorder = Recorder(_opener(config))
+    recorder.local_providers = {"local"} | local_names(providers or [])
     try:
         server = serve(
             router,
@@ -205,12 +227,15 @@ def _proxy(args: argparse.Namespace) -> int:
         logger.info("  forwarding only %d allowed API keys", len(proxy_config.allowed_key_hashes))
 
     def apply(new: Config, changed: list[str]) -> None:
-        if {"proxy.upstreams", "proxy.default_upstream"} & set(changed):
+        if {"providers", "proxy.default_upstream"} & set(changed):
             try:
                 live = ProxyConfig.model_validate(
                     {
                         **new.proxy.model_dump(),
-                        "upstreams": {**new.proxy.upstreams, **dict(args.route or [])},
+                        "upstreams": {
+                            **routes(watcher.providers or []),
+                            **dict(args.route or []),
+                        },
                         "default_upstream": args.upstream or new.proxy.default_upstream,
                     }
                 )
@@ -218,13 +243,14 @@ def _proxy(args: argparse.Namespace) -> int:
                 logger.warning("routes not changed: %s", exc)
                 return
             router.update(live.upstreams, live.default_upstream)
+            recorder.local_providers = {"local"} | local_names(watcher.providers or [])
             for line in router.describe():
                 logger.info("  %s%s", base, line)
         if "proxy.allowed_key_hashes" in changed:
             server.allowed = frozenset(new.proxy.allowed_key_hashes)
 
     pinned = ["proxy.default_upstream"] if args.upstream else []
-    watcher = _watch(config, version, apply, pinned)
+    watcher = _watch(config, version, apply, pinned, providers)
     stop = threading.Event()
     previous = {sig: signal.signal(sig, lambda *_: stop.set()) for sig in _STOP_SIGNALS}
     recorder.start()
@@ -425,6 +451,14 @@ def _prices(args: argparse.Namespace) -> int:
                 else None
             )
             source = PriceSource.LOCAL if args.local else None
+            known = {p.name for p in storage.get_providers()} | {"local"}
+            if args.provider and args.provider not in known:
+                print(
+                    f"aimeterix prices: no provider {args.provider!r}; providers: "
+                    f"{', '.join(sorted(known))} (add one with `aimeterix providers add`)",
+                    file=sys.stderr,
+                )
+                return 2
             set_price(
                 storage,  # type: ignore[arg-type]
                 args.model,
@@ -433,6 +467,7 @@ def _prices(args: argparse.Namespace) -> int:
                 by=getpass.getuser(),
                 start=start,
                 source=source,
+                provider=args.provider,
             )
             print(render_prices(current_prices(storage, now), currency, tz, reference))
         elif args.action == "apply-reference":
@@ -456,7 +491,10 @@ def _prices(args: argparse.Namespace) -> int:
             )
             print(render_applied(results, args.dry_run))
         else:
-            print(render_prices(current_prices(storage, now), currency, tz, reference))
+            rows = current_prices(storage, now)
+            if args.provider:
+                rows = [p for p in rows if p.provider == args.provider]
+            print(render_prices(rows, currency, tz, reference))
     except AiMeterixError as exc:
         print(f"aimeterix prices: {exc}", file=sys.stderr)
         return 2
@@ -550,6 +588,91 @@ def _password(args: argparse.Namespace) -> int:
         storage.close()
     print(f"password changed for {args.name}")
     return 0
+
+
+def _providers(args: argparse.Namespace) -> int:
+    import getpass
+
+    from ai_meterix.core.config import load_config
+    from ai_meterix.core.errors import AiMeterixError
+    from ai_meterix.core.settings import seed_settings
+    from ai_meterix.pricing.engine import local_zone
+    from ai_meterix.pricing.prices import current_prices
+    from ai_meterix.pricing.providers import add_provider, set_provider
+    from ai_meterix.storage import open_writer
+
+    from .providers import render_provider, render_providers
+
+    actions_with_name = ("show", "add", "set", "enable", "disable", "history")
+    if args.action in actions_with_name and not args.name:
+        print(f"aimeterix providers: {args.action} needs a provider name", file=sys.stderr)
+        return 2
+    try:
+        config = load_config(args.config)
+        if args.url:
+            config = config.model_copy(
+                update={"storage": config.storage.model_copy(update={"url": args.url})}
+            )
+        storage = open_writer(config.storage.url)
+    except AiMeterixError as exc:
+        print(f"aimeterix providers: {exc}", file=sys.stderr)
+        return 1
+    proxy = f"http://{config.proxy.host}:{config.proxy.port}"
+    values = {
+        "base_url": args.base_url,
+        "app_path": args.path,
+        "kind": args.kind,
+        "label": args.label,
+        "api_format": args.format,
+    }
+    try:
+        storage.migrate()
+        seed_settings(storage, config)
+        by = getpass.getuser()
+        if args.action == "add":
+            add_provider(storage, args.name, values, by=by)
+        elif args.action == "set":
+            if all(v is None for v in values.values()):
+                print("aimeterix providers: set needs at least one option", file=sys.stderr)
+                return 2
+            set_provider(storage, args.name, values, by=by)
+        elif args.action in ("enable", "disable"):
+            set_provider(storage, args.name, {"enabled": args.action == "enable"}, by=by)
+        providers = storage.get_providers()
+        now = datetime.now(timezone.utc)
+        prices = current_prices(storage, now)
+        if args.action == "list":
+            print(render_providers(providers, prices, proxy))
+            return 0
+        found = {p.name: p for p in providers}.get(args.name)
+        if found is None:
+            names = ", ".join(sorted(found_name for found_name in {p.name for p in providers}))
+            print(f"aimeterix providers: no provider {args.name!r}; providers: {names}",
+                  file=sys.stderr)  # fmt: skip
+            return 2
+        if args.action == "history":
+            changes = [
+                c
+                for c in storage.get_setting_changes()
+                if c.key.startswith(f"provider.{args.name}.")
+            ]
+            tz = local_zone()
+            for c in changes:
+                field = c.key.rsplit(".", 1)[1]
+                when = c.ts.astimezone(tz).strftime("%Y-%m-%d %H:%M")
+                print(f"{when}  {c.by:<10} {field}: {c.old} -> {c.new}")
+            if not changes:
+                print("no changes yet")
+            return 0
+        print(render_provider(found, prices, proxy))
+        if args.action in ("add", "set", "enable", "disable"):
+            print("\nthe proxy picks this up within a minute")
+        return 0
+    except (AiMeterixError, ValueError) as exc:
+        print(f"aimeterix providers: {exc}", file=sys.stderr)
+        return 2
+    finally:
+        storage.close()
 
 
 def _config(args: argparse.Namespace) -> int:
@@ -830,6 +953,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="start a new price period on this local day; earlier days keep their price",
     )
     prices.add_argument("--local", action="store_true", help="the model runs on this machine")
+    prices.add_argument(
+        "--provider", help="set: the provider the model belongs to; list: only this provider"
+    )
     prices.add_argument("--dry-run", action="store_true", help="apply-reference: only show")
     prices.add_argument(
         "--ignore-currency",
@@ -866,6 +992,31 @@ def build_parser() -> argparse.ArgumentParser:
     config.add_argument("--url", help="storage URL (default: from the config)")
     config.add_argument("--config", help="path to aimeterix.yaml")
     config.set_defaults(func=_config)
+
+    providers = commands.add_parser(
+        "providers", help="list, add or change the AI providers the proxy routes to"
+    )
+    providers.add_argument(
+        "action",
+        nargs="?",
+        choices=("list", "show", "add", "set", "enable", "disable", "history"),
+        default="list",
+    )
+    providers.add_argument("name", nargs="?", help="provider name, e.g. groq (the route name)")
+    providers.add_argument("--base-url", help="the provider's address, e.g. https://api.groq.com")
+    providers.add_argument("--path", help="path an app adds after it, e.g. /openai/v1")
+    providers.add_argument(
+        "--kind", choices=("cloud", "local"), help="local: runs on this machine (no token price)"
+    )
+    providers.add_argument("--label", help="display name, e.g. Groq")
+    providers.add_argument(
+        "--format",
+        choices=("openai", "anthropic", "gemini", "ollama"),
+        help="the API's response format (default openai)",
+    )
+    providers.add_argument("--url", help="storage URL (default: from the config)")
+    providers.add_argument("--config", help="path to aimeterix.yaml")
+    providers.set_defaults(func=_providers)
 
     names = ("agent", "proxy", "serve")
     start = commands.add_parser("start", help="run the agent, proxy and API in the background")

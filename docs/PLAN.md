@@ -296,6 +296,7 @@ Each phase lists its goal, the steps, the decisions to settle **before** we buil
 2. **`aimeterix serve`:** the localhost API (Phase 3) and the dashboard in one process. **S**
 3. **Dashboard endpoint:** `GET /api/dashboard` (range, model, feature), same computation as the CLI. **S**
 4. **Dashboard:** read-only, server-rendered, inline charts, no external requests. Panels: data coverage and gaps, usage per model, daily cost, hardware use, data issues. Browser login with a session cookie. **M**
+Providers as records with their models and prices (record 0018), 2026-10-15, owner's request; dashboard forms for them in MVP-2.
 Steps 2-4 done early (2026-10-15, owner's request): `serve` serves the page at `/` and `GET /api/dashboard`; hardware-use panel still to come.
 5. **Advice on request:** "Get advice" calls the Phase 4 advice and forecast endpoints for the current filters; shows recommendations, forecast and budget status; nothing stored. **S**
 

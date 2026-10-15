@@ -25,7 +25,8 @@ GET      /api/prices                     user   price per 1M tokens in force now
 GET      /api/prices/history             user   change log, ``model`` optional
 GET      /api/prices/reference           user   the shipped, dated reference list
 PUT      /api/prices/<model>             admin  ``input``, ``output``, ``cache_read``,
-                                                ``cache_write``, ``from``, ``local``
+                                                ``cache_write``, ``from``, ``local``,
+                                                ``provider``
 POST     /api/prices/apply-reference     admin  ``dry_run``
 GET      /api/profiles                   user   each machine's profile and history
 PUT      /api/profiles/<host>            admin  ``rate``, ``pue``, ``fees``, ``spread``,
@@ -33,11 +34,17 @@ PUT      /api/profiles/<host>            admin  ``rate``, ``pue``, ``fees``, ``s
 GET      /api/config                     user   live settings, with their versions
 GET      /api/config/history             user   change log, ``key`` optional
 PUT      /api/config/<key>               admin  ``value``, or ``reset: true``
+GET      /api/providers                  user   providers with their app URL and models
+GET      /api/providers/history          user   change log, ``name`` optional
+PUT      /api/providers/<name>           admin  ``base_url``, ``app_path``, ``kind``,
+                                                ``label``, ``format``, ``enabled``;
+                                                adds the provider when it is new
 =======  ==============================  =====  ======================================
 """
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import logging
 import secrets
@@ -57,7 +64,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 from ai_meterix.collectors.proxy import is_loopback
 from ai_meterix.core.config import Config
 from ai_meterix.core.errors import AiMeterixError
-from ai_meterix.core.model import CURRENCY, PriceSource, Role
+from ai_meterix.core.model import CURRENCY, ModelPrice, PriceSource, Provider, Role
 from ai_meterix.core.settings import LIVE, effective, live_values, reset_setting, set_setting
 from ai_meterix.pricing.engine import CostEngine, Statement
 from ai_meterix.pricing.prices import (
@@ -67,6 +74,7 @@ from ai_meterix.pricing.prices import (
     set_price,
 )
 from ai_meterix.pricing.profiles import profile_dict, set_profile
+from ai_meterix.pricing.providers import add_provider, app_url, set_provider
 from ai_meterix.storage import open_reader, open_writer
 from ai_meterix.storage.base import StorageReader, StorageWriter
 
@@ -88,6 +96,16 @@ _PRICE_KEYS = {
 @cache
 def _dashboard_html() -> str:
     return resources.files("ai_meterix.interfaces").joinpath("dashboard.html").read_text("utf-8")
+
+
+def _provider_name(storage: StorageReader, name: Any) -> str | None:
+    """A provider named in a request body, checked against the known ones."""
+    if name is None:
+        return None
+    known = {p.name for p in storage.get_providers()} | {"local"}
+    if name not in known:
+        raise ApiError(400, f"no provider {name!r}; providers: {', '.join(sorted(known))}")
+    return str(name)
 
 
 class ApiError(Exception):
@@ -317,6 +335,8 @@ class _Handler(BaseHTTPRequestHandler):
             ("GET", "/api/profiles"): self.profiles,
             ("GET", "/api/config"): self.settings,
             ("GET", "/api/config/history"): self.setting_history,
+            ("GET", "/api/providers"): self.providers,
+            ("GET", "/api/providers/history"): self.provider_history,
         }
         if (method, path) in fixed:
             return fixed[(method, path)], None
@@ -324,6 +344,7 @@ class _Handler(BaseHTTPRequestHandler):
             ("/api/prices/", self.put_price),
             ("/api/profiles/", self.put_profile),
             ("/api/config/", self.put_setting),
+            ("/api/providers/", self.put_provider),
         ):
             if path.startswith(prefix) and len(path) > len(prefix):
                 if method != "PUT":
@@ -452,6 +473,7 @@ class _Handler(BaseHTTPRequestHandler):
             statement = engine.statement(start, end, now=now)
             coverage = engine.coverage(start, end, now=now)
             prices = current_prices(storage, now)
+            providers = self._provider_rows(storage.get_providers(), prices)
             profiles = [
                 profile_dict(p)
                 for h in storage.get_hosts()
@@ -468,6 +490,7 @@ class _Handler(BaseHTTPRequestHandler):
             "notes": notes,
             "health": health(self.server.storage_url),
             "prices": prices,
+            "providers": providers,
             "profiles": profiles,
             "settings": live_values(live),
         }
@@ -520,6 +543,7 @@ class _Handler(BaseHTTPRequestHandler):
                 by=session.name,
                 start=start,
                 source=PriceSource.LOCAL if body.get("local") else None,
+                provider=_provider_name(storage, body.get("provider")),
             )
         return {"price": price}
 
@@ -580,6 +604,54 @@ class _Handler(BaseHTTPRequestHandler):
         with self.server.reader() as storage:
             changes = [c for c in storage.get_setting_changes(key) if c.key in LIVE]
         return {"changes": changes}
+
+    def _provider_rows(
+        self, providers: list[Provider], prices: list[ModelPrice]
+    ) -> list[dict[str, Any]]:
+        proxy = f"http://{self.server.config.proxy.host}:{self.server.config.proxy.port}"
+        return [
+            {
+                **dataclasses.asdict(p),
+                "kind": p.kind.value,
+                "app_url": app_url(p, proxy),
+                "models": [m.model for m in prices if m.provider == p.name],
+            }
+            for p in providers
+        ]
+
+    def providers(self, query: dict[str, str]) -> dict[str, Any]:
+        self._session()
+        with self.server.reader() as storage:
+            prices = current_prices(storage, datetime.now(timezone.utc))
+            rows = self._provider_rows(storage.get_providers(), prices)
+        return {"providers": rows, "prices": prices}
+
+    def provider_history(self, query: dict[str, str]) -> dict[str, Any]:
+        self._session()
+        prefix = f"provider.{query['name']}." if query.get("name") else "provider."
+        with self.server.reader() as storage:
+            changes = [c for c in storage.get_setting_changes() if c.key.startswith(prefix)]
+        return {"changes": changes}
+
+    def put_provider(self, query: dict[str, str], name: str) -> dict[str, Any]:
+        session = self._admin()
+        body = self._body()
+        values = {
+            "base_url": body.get("base_url"),
+            "app_path": body.get("app_path"),
+            "kind": body.get("kind"),
+            "label": body.get("label"),
+            "api_format": body.get("format"),
+            "enabled": body.get("enabled"),
+        }
+        with self.server.writer() as storage:
+            if any(p.name == name for p in storage.get_providers()):
+                provider = set_provider(storage, name, values, by=session.name)
+            else:
+                provider = add_provider(storage, name, values, by=session.name)
+            prices = current_prices(storage, datetime.now(timezone.utc))
+            (row,) = self._provider_rows([provider], prices)
+        return {"provider": row}
 
     def put_setting(self, query: dict[str, str], key: str) -> dict[str, Any]:
         session = self._admin()

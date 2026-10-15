@@ -19,6 +19,7 @@ from ai_meterix.pricing.prices import (
     price_at,
     set_price,
 )
+from ai_meterix.pricing.providers import catalog
 from ai_meterix.storage import HostInventory, StorageWriter, open_writer
 
 UTC = timezone.utc
@@ -68,10 +69,11 @@ def test_snapshot_dates_are_stripped() -> None:
 
 def test_the_shipped_reference_list_is_dated_and_complete() -> None:
     ref = load_reference()
+    built_in = {p.name for p in catalog()}
     assert ref.checked and ref.currency == "USD" and ref.sources
     assert len({r.model for r in ref.models}) == len(ref.models)
     for r in ref.models:
-        assert r.provider in ("openai", "anthropic")
+        assert r.provider in built_in and r.provider in ref.sources  # every price has a source
         assert r.input_per_m > 0 and r.output_per_m >= r.input_per_m
         assert r.cache_read_per_m <= r.input_per_m
     assert ref.find("claude-opus-4-1-20250805") == ref.find("claude-opus-4-1")

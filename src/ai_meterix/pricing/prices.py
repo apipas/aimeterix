@@ -11,8 +11,10 @@ period it covers at once.
 - ``ensure_price_row`` gives a model seen for the first time its default row:
   0 for a local model, 0 with ``price_set = False`` ("price not set") for an
   API model.
-- ``apply_reference`` copies the shipped, dated list of public OpenAI and
-  Anthropic prices into the table. It runs only when an admin asks for it.
+- ``apply_reference`` copies the shipped, dated list of public prices of the
+  built-in cloud providers into the table. It runs only when an admin asks.
+- Each row names the provider its model belongs to (record 0018). A model with
+  no price, or one still at "price not set", costs 0.
 """
 
 from __future__ import annotations
@@ -125,19 +127,26 @@ def set_price(
     by: str,
     start: datetime | None = None,
     source: PriceSource | None = None,
+    provider: str | None = None,
 ) -> ModelPrice:
     """Set ``model``'s prices; fields not in ``values`` keep their current value.
 
     Without ``start`` the row in force now is corrected. With ``start`` a new
     period begins there: the row it falls in ends at ``start``, and the new
-    row runs to where that row ran.
+    row runs to where that row ran. ``provider`` names the provider the model
+    belongs to, on every period of it.
     """
     rows = sorted(storage.get_prices(model), key=lambda p: p.valid_from)
+    if provider is not None:
+        for row in rows:
+            if row.provider != provider:
+                storage.save_price(replace(row, provider=provider), by=by)
+        rows = [replace(row, provider=provider) for row in rows]
     at = start or now
     base = price_at(rows, at)
     if base is None:
         kind = source or PriceSource.API
-        new = ModelPrice(model, kind, start or now, **values)  # type: ignore[arg-type]
+        new = ModelPrice(model, kind, start or now, provider=provider or "", **values)  # type: ignore[arg-type]
         storage.save_price(new, by=by)
         return new
     changed = replace(base, price_set=True, **values)  # type: ignore[arg-type]
@@ -157,13 +166,19 @@ def set_price(
 
 
 def ensure_price_row(
-    storage: StorageWriter, model: str, *, local: bool, ts: datetime, by: str
+    storage: StorageWriter,
+    model: str,
+    *,
+    local: bool,
+    ts: datetime,
+    by: str,
+    provider: str = "",
 ) -> bool:
     """Create the default row for a model seen for the first time; True if created."""
     if storage.get_prices(model):
         return False
     source = PriceSource.LOCAL if local else PriceSource.API
-    storage.save_price(ModelPrice(model, source, ts, price_set=local), by=by)
+    storage.save_price(ModelPrice(model, source, ts, price_set=local, provider=provider), by=by)
     return True
 
 
@@ -221,6 +236,7 @@ def apply_reference(
                 by=by,
                 start=now if action == "new period" else None,
                 source=PriceSource.API,
+                provider=ref.provider,
             )
         results.append(Applied(model, action, None if current is None else _values(current), new))
     return results

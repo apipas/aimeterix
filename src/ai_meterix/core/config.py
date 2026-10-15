@@ -30,7 +30,6 @@ ENV_PREFIX = "AIMETERIX_"
 CONFIG_ENV = "AIMETERIX_CONFIG"
 DEFAULT_CONFIG_FILE = "aimeterix.yaml"
 DEFAULT_STORAGE_URL = "sqlite:///~/.aimeterix/meter.db"
-DEFAULT_UPSTREAMS = {"openai": "https://api.openai.com", "anthropic": "https://api.anthropic.com"}
 _ROUTE_NAME = re.compile(r"[a-z0-9][a-z0-9_-]*")
 _KEY_HASH = re.compile(r"[0-9a-f]{64}")
 
@@ -53,8 +52,10 @@ class AgentConfig(_Section):
 class ProxyConfig(_Section):
     """The LLM proxy (record 0011 item 4).
 
-    ``upstreams`` maps a route name to a provider's base URL: a client uses
-    ``http://127.0.0.1:8787/<route>/v1``. ``default_upstream`` serves paths with
+    ``upstreams`` maps a route name to a base URL; on the first start these are
+    added to the providers in the database (record 0018), which also hold the
+    built-in ones, so this is only needed for providers of your own. A client
+    uses ``http://127.0.0.1:8787/<route>/v1``. ``default_upstream`` serves paths with
     no route name, e.g. a local llama.cpp server. ``allowed_key_hashes`` holds
     SHA-256 hashes of the API keys the proxy may forward (``aimeterix proxy
     --hash-key``); empty means any key.
@@ -62,7 +63,7 @@ class ProxyConfig(_Section):
 
     host: str = "127.0.0.1"
     port: int = Field(default=8787, ge=1, le=65535)
-    upstreams: dict[str, str] = Field(default_factory=lambda: dict(DEFAULT_UPSTREAMS))
+    upstreams: dict[str, str] = Field(default_factory=dict)
     default_upstream: str | None = None
     allowed_key_hashes: tuple[str, ...] = ()
 

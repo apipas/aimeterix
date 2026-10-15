@@ -12,11 +12,13 @@ Rules every entity follows:
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from enum import Enum
 from typing import Any
+from urllib.parse import urlsplit
 
 from .errors import ValidationError
 from .timeutil import ensure_utc
@@ -66,6 +68,11 @@ class FeeSpread(str, Enum):
 class PriceSource(str, Enum):
     LOCAL = "local"
     API = "api"
+
+
+class ProviderKind(str, Enum):
+    CLOUD = "cloud"
+    LOCAL = "local"
 
 
 class Role(str, Enum):
@@ -423,14 +430,67 @@ class ModelPrice:
     cache_write_per_m: Decimal = Decimal("0")
     valid_to: datetime | None = None
     price_set: bool = True
+    provider: str = ""  # the provider the model belongs to; "" when not known
 
     def __post_init__(self) -> None:
         _require_id(self, "model")
+        if not isinstance(self.provider, str):
+            raise ValidationError("ModelPrice.provider must be a string")
         _require_enum(self, "source", PriceSource)
         _require_money(self, "input_per_m", "output_per_m", "cache_read_per_m", "cache_write_per_m")
         _require_utc(self, "valid_from", "valid_to")
         if self.valid_to is not None and self.valid_to <= self.valid_from:
             raise ValidationError("ModelPrice.valid_to must be after valid_from")
+
+
+_PROVIDER_NAME = re.compile(r"[a-z0-9][a-z0-9_-]*")
+
+
+@dataclass(frozen=True, slots=True)
+class Provider:
+    """An AI provider the proxy can route to (record 0018).
+
+    ``name`` is the route: apps call ``http://127.0.0.1:<port>/<name><app_path>``
+    and the proxy forwards to ``base_url<app_path>``. ``local`` providers run on
+    this machine, so their models cost their energy share, not tokens. Built-in
+    providers can be edited or disabled, never deleted.
+    """
+
+    name: str
+    base_url: str
+    kind: ProviderKind = ProviderKind.CLOUD
+    label: str = ""
+    app_path: str = ""
+    api_format: str = "openai"
+    enabled: bool = True
+    built_in: bool = False
+    version: int = 1
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.name, str) or not _PROVIDER_NAME.fullmatch(self.name):
+            raise ValidationError(
+                f"provider name {self.name!r}: use lowercase letters, digits, - or _"
+            )
+        if self.name in ("app", "local"):
+            raise ValidationError(f"provider name {self.name!r} is reserved")
+        _require_enum(self, "kind", ProviderKind)
+        parts = urlsplit(self.base_url) if isinstance(self.base_url, str) else None
+        if parts is None or parts.scheme not in ("http", "https") or not parts.hostname:
+            raise ValidationError(f"provider {self.name}: base URL must be http:// or https://")
+        _set(self, "base_url", self.base_url.rstrip("/"))
+        path = (self.app_path or "").strip()
+        if path and not path.startswith("/"):
+            path = "/" + path
+        _set(self, "app_path", path.rstrip("/"))
+        if self.api_format not in API_FORMATS:
+            raise ValidationError(
+                f"provider {self.name}: format must be one of {', '.join(API_FORMATS)}"
+            )
+        _set(self, "label", self.label or self.name)
+        _require_int(self, "version")
+
+
+API_FORMATS = ("openai", "anthropic", "gemini", "ollama")
 
 
 # --- settings, audit and accounts --------------------------------------------

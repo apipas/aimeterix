@@ -1,15 +1,28 @@
 {
-  "checked": "2026-10-13",
+  "checked": "2026-10-15",
   "currency": "USD",
   "unit": "per 1M tokens",
   "notes": [
     "Standard tier, short context, no batch, regional or fast-mode prices.",
     "Anthropic cache_write is the 5-minute cache write price; Claude Haiku 5.5 prompts over 100K tokens cost more.",
-    "OpenAI prices are for prompts under its long-context threshold."
+    "OpenAI prices are for prompts under its long-context threshold.",
+    "Other providers publish no per-token cache write price; it is 0 here.",
+    "Gemini: promotional prices; gemini-4-argon doubles on 2026-12-01, gemini-3.8-flash on 2027-01-01. Prompts over 200K tokens cost more.",
+    "DeepSeek: peak-hour prices; off-peak hours cost half.",
+    "xAI: a request of 200K prompt tokens or more is billed at double rate.",
+    "Fireworks: Standard tier. Groq: only models with a public price are listed.",
+    "A price belongs to a model name: openai/gpt-oss-120b is on Groq and Together under the same name, so it is listed once, with Groq's price (Together's differs only for cached input)."
   ],
   "sources": {
     "anthropic": "https://platform.claude.com/docs/en/about-claude/pricing",
-    "openai": "https://developers.openai.com/api/docs/pricing"
+    "openai": "https://developers.openai.com/api/docs/pricing",
+    "gemini": "https://ai.google.dev/gemini-api/docs/pricing",
+    "mistral": "https://docs.mistral.ai/inference/pricing",
+    "groq": "https://console.groq.com/docs/models",
+    "together": "https://docs.together.ai/docs/serverless/models",
+    "fireworks": "https://docs.fireworks.ai/serverless/pricing",
+    "deepseek": "https://api-docs.deepseek.com/quick_start/pricing/",
+    "xai": "https://docs.x.ai/developers/models"
   },
   "models": [
     {"provider": "anthropic", "model": "claude-fable-5-1", "input": "10", "output": "50", "cache_read": "0.25", "cache_write": "12.50"},
@@ -36,6 +49,34 @@
     {"provider": "openai", "model": "gpt-6.1-sol", "input": "2", "output": "10", "cache_read": "0.10", "cache_write": "2.50"},
     {"provider": "openai", "model": "gpt-6-luna", "input": "0.10", "output": "0.50", "cache_read": "0.01", "cache_write": "0.125"},
     {"provider": "openai", "model": "chat-latest", "input": "5", "output": "30", "cache_read": "0.50", "cache_write": null},
-    {"provider": "openai", "model": "gpt-5.3-codex", "input": "1.75", "output": "14", "cache_read": "0.175", "cache_write": null}
+    {"provider": "openai", "model": "gpt-5.3-codex", "input": "1.75", "output": "14", "cache_read": "0.175", "cache_write": null},
+    {"provider": "gemini", "model": "gemini-4-argon", "input": "2.00", "output": "10.00", "cache_read": "0.10"},
+    {"provider": "gemini", "model": "gemini-3.8-flash", "input": "0.75", "output": "3.75", "cache_read": "0.075"},
+    {"provider": "gemini", "model": "gemini-3.5-flash-lite", "input": "0.30", "output": "2.50", "cache_read": "0.03"},
+    {"provider": "gemini", "model": "gemini-3.1-pro-preview", "input": "2.00", "output": "12.00", "cache_read": "0.20"},
+    {"provider": "gemini", "model": "gemini-2.5-pro", "input": "1.25", "output": "10.00", "cache_read": "0.125"},
+    {"provider": "gemini", "model": "gemini-2.5-flash", "input": "0.30", "output": "2.50", "cache_read": "0.03"},
+    {"provider": "mistral", "model": "mistral-large-2512", "input": "0.5", "output": "1.5", "cache_read": "0.05"},
+    {"provider": "mistral", "model": "mistral-small-2603", "input": "0.15", "output": "0.6", "cache_read": "0.015"},
+    {"provider": "mistral", "model": "ministral-8b-2512", "input": "0.15", "output": "0.15", "cache_read": "0.015"},
+    {"provider": "groq", "model": "openai/gpt-oss-120b", "input": "0.15", "output": "0.60", "cache_read": "0.075"},
+    {"provider": "groq", "model": "openai/gpt-oss-20b", "input": "0.075", "output": "0.30", "cache_read": "0.037"},
+    {"provider": "together", "model": "deepseek-ai/DeepSeek-V4.1-Flash", "input": "0.30", "output": "1.20", "cache_read": "0.006"},
+    {"provider": "together", "model": "deepseek-ai/DeepSeek-V4-Pro-0813", "input": "1.32", "output": "3.96", "cache_read": "0.13"},
+    {"provider": "together", "model": "moonshotai/Kimi-K3", "input": "3.00", "output": "15.00", "cache_read": "0.30"},
+    {"provider": "together", "model": "zai-org/GLM-5.3", "input": "1.40", "output": "4.40", "cache_read": "0.26"},
+    {"provider": "together", "model": "Qwen/Qwen3.7-Max", "input": "2.50", "output": "7.50", "cache_read": "0.50"},
+    {"provider": "fireworks", "model": "accounts/fireworks/models/kimi-k3", "input": "3.00", "output": "15.00", "cache_read": "0.30"},
+    {"provider": "fireworks", "model": "accounts/fireworks/models/deepseek-v4p1-flash", "input": "0.30", "output": "1.20", "cache_read": "0.006"},
+    {"provider": "fireworks", "model": "accounts/fireworks/models/glm-5p3", "input": "1.40", "output": "4.40", "cache_read": "0.26"},
+    {"provider": "fireworks", "model": "accounts/fireworks/models/qwen3p8-max", "input": "2.00", "output": "6.00", "cache_read": "0.25"},
+    {"provider": "fireworks", "model": "accounts/fireworks/models/minimax-m3", "input": "0.30", "output": "1.20", "cache_read": "0.06"},
+    {"provider": "fireworks", "model": "accounts/fireworks/models/gpt-oss-120b", "input": "0.15", "output": "0.60", "cache_read": "0.015"},
+    {"provider": "deepseek", "model": "deepseek-flash", "input": "0.3", "output": "1.2", "cache_read": "0.006"},
+    {"provider": "xai", "model": "grok-4.7", "input": "2.00", "output": "6.00", "cache_read": "0.50"},
+    {"provider": "xai", "model": "grok-4.5", "input": "2.00", "output": "6.00", "cache_read": "0.30"},
+    {"provider": "xai", "model": "grok-4.3", "input": "1.25", "output": "2.50", "cache_read": "0.20"},
+    {"provider": "xai", "model": "grok-4.20-0309-reasoning", "input": "1.25", "output": "2.50", "cache_read": "0.20"},
+    {"provider": "xai", "model": "grok-build-0.1", "input": "1.00", "output": "2.00", "cache_read": "0.20"}
   ]
 }

@@ -6,8 +6,9 @@ database wins and the admin changes them with ``aimeterix config set`` or the
 API. Only bootstrap settings stay in the file or environment: the database URL,
 addresses and ports, and secrets.
 
-The agent and proxy re-read the settings about every 60 s (``SettingsWatcher``)
-and apply changes without a restart. Every change is logged with who and when.
+The agent and proxy re-read the settings and the providers (record 0018)
+about every 60 s (``SettingsWatcher``) and apply changes without a restart.
+Every change is logged with who and when.
 """
 
 from __future__ import annotations
@@ -26,6 +27,7 @@ from pydantic import ValidationError as PydanticValidationError
 from .config import Config
 
 if TYPE_CHECKING:
+    from ai_meterix.core.model import Provider
     from ai_meterix.storage.base import StorageReader, StorageWriter
 
 log = logging.getLogger("ai_meterix.settings")
@@ -36,7 +38,6 @@ LIVE: dict[str, tuple[str, str]] = {
     "agent.interval_s": ("agent", "interval_s"),
     "storage.raw_retention_days": ("storage", "raw_retention_days"),
     "storage.rollup_retention_days": ("storage", "rollup_retention_days"),
-    "proxy.upstreams": ("proxy", "upstreams"),
     "proxy.default_upstream": ("proxy", "default_upstream"),
     "proxy.allowed_key_hashes": ("proxy", "allowed_key_hashes"),
 }
@@ -73,13 +74,21 @@ def _with(config: Config, values: Mapping[str, Any]) -> Config:
 
 
 def seed_settings(storage: StorageWriter, config: Config, *, by: str = "init") -> list[str]:
-    """Copy the live settings missing from the database out of ``config``."""
+    """Copy the live settings missing from the database out of ``config``, and
+    add the built-in providers and the config file's routes (record 0018).
+    Returns the settings added."""
+    from ai_meterix.pricing.providers import seed_providers
+
     saved = storage.get_settings()
     added = []
     for key, value in live_values(config).items():
         if key not in saved:
             storage.save_setting(key, value, by=by)
             added.append(key)
+    # routes saved as the old ``proxy.upstreams`` setting become providers too
+    old = saved.get("proxy.upstreams")
+    upstreams = {**(old.value if old and isinstance(old.value, dict) else {})}
+    seed_providers(storage, {**upstreams, **config.proxy.upstreams}, by=by)
     return added
 
 
@@ -125,9 +134,11 @@ def reset_setting(storage: StorageWriter, config: Config, key: str, *, by: str) 
 
 
 def settings_version(storage: StorageReader) -> tuple[int, ...]:
-    """Changes whenever a live setting changes."""
+    """Changes whenever a live setting or a provider changes."""
     saved = storage.get_settings()
-    return tuple(saved[k].version if k in saved else 0 for k in LIVE)
+    providers = storage.get_providers()
+    versions = [saved[k].version if k in saved else 0 for k in LIVE]
+    return (*versions, len(providers), sum(p.version for p in providers))
 
 
 def export_yaml(config: Config) -> str:
@@ -148,7 +159,9 @@ class SettingsWatcher:
     """Re-reads the live settings every ``every_s`` and calls ``apply`` on a change.
 
     ``pinned`` keys were given on the command line for this run and are left
-    alone; a failed read is logged and retried at the next check.
+    alone; a failed read is logged and retried at the next check. A change to
+    the providers is reported as the key ``"providers"``; the current list is
+    ``watcher.providers``.
     """
 
     def __init__(
@@ -167,6 +180,7 @@ class SettingsWatcher:
         self.version = version
         self.every_s = every_s
         self.pinned = set(pinned)
+        self.providers: list[Provider] | None = None
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
@@ -178,14 +192,21 @@ class SettingsWatcher:
             if version == self.version:
                 return []
             new, _ = effective(self.config, storage)
+            providers = storage.get_providers()
         finally:
             storage.close()
         self.version = version
         before, after = live_values(self.config), live_values(new)
         changed = [k for k in LIVE if before[k] != after[k] and k not in self.pinned]
+        if self.providers is not None and providers != self.providers:
+            changed.append("providers")
+        self.providers = providers
         self.config = new
         for key in changed:
-            log.info("setting %s is now %s", key, json.dumps(after[key]))
+            if key in after:
+                log.info("setting %s is now %s", key, json.dumps(after[key]))
+            else:
+                log.info("the providers changed")
         if changed:
             self._apply(new, changed)
         return changed
