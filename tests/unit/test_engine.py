@@ -378,4 +378,5 @@ def test_usage_shows_watt_hours(tmp_path: Path, capsys: pytest.CaptureFixture[st
     rows = capsys.readouterr().out.splitlines()
     head = rows[0].split(",")
     qwen = next(r.split(",") for r in rows if r.startswith("2026-10-05,qwen,"))
-    assert qwen[head.index("wh")] == "30.000" and qwen[head.index("kwh")] == "0.030"
+    assert qwen[head.index("wh")] == "30.000" and qwen[head.index("kwh")] == "0.030000"
+    assert all("E" not in cell for row in rows[1:] for cell in row.split(",")[10:16])
