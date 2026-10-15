@@ -215,3 +215,61 @@ def test_settings_are_read_by_all_and_changed_by_the_admin(api: ApiServer) -> No
     assert user.call("GET", "/api/config/history?key=nope")[0] == 404
     status, body = admin.call("PUT", "/api/config/agent.interval_s", {"reset": True})
     assert status == 200 and body["value"] == 10.0
+
+
+def raw(server: ApiServer, method: str, path: str, body: Any = None, headers: Any = None) -> Any:
+    conn = http.client.HTTPConnection("127.0.0.1", int(server.server_address[1]), timeout=10)
+    conn.request(method, path, None if body is None else json.dumps(body), headers or {})
+    response = conn.getresponse()
+    data = response.read()
+    conn.close()
+    return response, data
+
+
+def test_the_dashboard_page_is_self_contained(api: ApiServer) -> None:
+    response, data = raw(api, "GET", "/")
+    page = data.decode()
+    assert response.status == 200 and response.getheader("Content-Type").startswith("text/html")
+    policy = response.getheader("Content-Security-Policy")
+    assert "default-src 'none'" in policy and "frame-ancestors 'none'" in policy
+    nonce = policy.split("'nonce-")[1].split("'")[0]
+    assert page.count(f'nonce="{nonce}"') == 2 and "{{nonce}}" not in page
+    assert "http://" not in page.replace("http://www.w3.org/2000/svg", "")
+    assert "https://" not in page  # no external requests
+    assert raw(api, "GET", "/")[0].getheader("Content-Security-Policy") != policy  # fresh nonce
+
+
+def test_the_browser_logs_in_with_a_cookie(api: ApiServer) -> None:
+    ready(api, "user")  # first password changed
+    response, data = raw(
+        api, "POST", "/api/login", {"name": "user", "password": "user-secret-1", "cookie": True}
+    )
+    assert response.status == 200 and "token" not in json.loads(data)
+    cookie = response.getheader("Set-Cookie")
+    assert "HttpOnly" in cookie and "SameSite=Strict" in cookie
+    jar = {"Cookie": cookie.split(";")[0]}
+    response, data = raw(api, "GET", "/api/me", headers=jar)
+    assert response.status == 200 and json.loads(data)["name"] == "user"
+    # a change sent with the cookie alone (as another site could) is refused
+    response, _ = raw(api, "POST", "/api/logout", headers=jar)
+    assert response.status == 403
+    response, _ = raw(api, "POST", "/api/logout", headers={**jar, "X-AIMeterix": "1"})
+    assert response.status == 200 and "Max-Age=0" in response.getheader("Set-Cookie")
+    assert raw(api, "GET", "/api/me", headers=jar)[0].status == 401
+
+
+def test_the_dashboard_endpoint_matches_the_cli(api: ApiServer, tmp_path: Path) -> None:
+    user = ready(api, "user")
+    status, body = user.call("GET", "/api/dashboard?from=2026-10-05&to=2026-10-05")
+    assert status == 200
+    usage = user.call("GET", "/api/usage?from=2026-10-05&to=2026-10-05&by=model")[1]
+    assert body["models"] == usage  # the same computation as `aimeterix usage`
+    (cov,) = body["coverage"]
+    assert cov == {"day": "2026-10-05", "measured_h": 1.0, "hours": 24.0}
+    assert body["health"]["processes"][0]["name"] == "agent"
+    assert "agent.interval_s" in body["settings"]
+    assert {p["host"] for p in body["profiles"]} == {"mac"}
+    assert user.call("GET", "/api/dashboard?from=2026-10-06&to=2026-10-05")[0] == 400
+    assert user.call("GET", "/api/dashboard?from=2024-01-01&to=2026-10-05")[0] == 400
+    status, body = user.call("GET", "/api/dashboard")  # default: the last 7 days
+    assert status == 200 and len(body["coverage"]) == 7

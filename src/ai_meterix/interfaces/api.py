@@ -5,7 +5,10 @@ A small JSON API on ``127.0.0.1:8788`` (standard library only), run by
 the same numbers. Money and energy are exact decimals sent as strings.
 
 Log in with ``POST /api/login`` ``{"name", "password"}`` and send the token as
-``Authorization: Bearer <token>``. Until an account has changed its first
+``Authorization: Bearer <token>``. The dashboard at ``/`` logs in with
+``"cookie": true`` instead: the token then goes into an HttpOnly,
+SameSite=Strict cookie, and requests that change something must also send
+``X-AIMeterix: 1`` (a header other sites cannot add). Until an account has changed its first
 password, only ``POST /api/password`` and ``/api/logout`` answer.
 
 =======  ==============================  =====  ======================================
@@ -15,7 +18,9 @@ GET      /api/health                     none   storage, schema, and `aimeterix 
 POST     /api/login, /api/logout         none   start or end a session
 POST     /api/password                   any    change your password (``old``,
                                                 ``password``); admin: ``name`` too
+GET      /                               none   the dashboard page (record 0016)
 GET      /api/usage                      user   ``from``, ``to``, ``last``, ``by``
+GET      /api/dashboard                  user   ``from``, ``to``: everything the page shows
 GET      /api/prices                     user   price per 1M tokens in force now
 GET      /api/prices/history             user   change log, ``model`` optional
 GET      /api/prices/reference           user   the shipped, dated reference list
@@ -35,14 +40,17 @@ from __future__ import annotations
 
 import json
 import logging
+import secrets
 import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import asdict, is_dataclass
-from datetime import date, datetime, timezone, tzinfo
+from datetime import date, datetime, timedelta, timezone, tzinfo
 from decimal import Decimal, InvalidOperation
 from enum import Enum
+from functools import cache
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from importlib import resources
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlsplit
 
@@ -67,12 +75,19 @@ from .usage import period
 
 log = logging.getLogger("ai_meterix.api")
 MAX_BODY = 64 * 1024
+COOKIE = "aimeterix_session"
+CSRF_HEADER = "X-AIMeterix"
 _PRICE_KEYS = {
     "input": "input_per_m",
     "output": "output_per_m",
     "cache_read": "cache_read_per_m",
     "cache_write": "cache_write_per_m",
 }
+
+
+@cache
+def _dashboard_html() -> str:
+    return resources.files("ai_meterix.interfaces").joinpath("dashboard.html").read_text("utf-8")
 
 
 class ApiError(Exception):
@@ -193,8 +208,31 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(data)))
         self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        for name, value in getattr(self, "_extra_headers", []):
+            self.send_header(name, value)
+        self._extra_headers: list[tuple[str, str]] = []
         self.end_headers()
         self.wfile.write(data)
+
+    def _page(self) -> None:
+        nonce = secrets.token_urlsafe(16)
+        html = _dashboard_html().replace("{{nonce}}", nonce).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(html)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header(
+            "Content-Security-Policy",
+            f"default-src 'none'; script-src 'nonce-{nonce}'; style-src 'nonce-{nonce}'; "
+            "connect-src 'self'; img-src 'self' data:; form-action 'none'; "
+            "frame-ancestors 'none'; base-uri 'none'",
+        )
+        self.end_headers()
+        self.wfile.write(html)
 
     def _body(self) -> dict[str, Any]:
         length = int(self.headers.get("Content-Length") or 0)
@@ -212,7 +250,22 @@ class _Handler(BaseHTTPRequestHandler):
 
     def _token(self) -> str:
         auth = self.headers.get("Authorization", "")
-        return auth[7:].strip() if auth.lower().startswith("bearer ") else ""
+        if auth.lower().startswith("bearer "):
+            return auth[7:].strip()
+        return self._cookie()
+
+    def _cookie(self) -> str:
+        for part in self.headers.get("Cookie", "").split(";"):
+            name, _, value = part.strip().partition("=")
+            if name == COOKIE:
+                return value
+        return ""
+
+    def _check_csrf(self, method: str) -> None:
+        """A request that changes something and logs in by cookie must carry our header."""
+        uses_cookie = not self.headers.get("Authorization") and self._cookie()
+        if method != "GET" and uses_cookie and self.headers.get(CSRF_HEADER) != "1":
+            raise ApiError(403, f"send the {CSRF_HEADER}: 1 header")
 
     def _session(self, *, allow_must_change: bool = False) -> Session:
         session = self.server.sessions.get(self._token())
@@ -232,7 +285,11 @@ class _Handler(BaseHTTPRequestHandler):
         parts = urlsplit(self.path)
         path = parts.path.rstrip("/")
         query = {k: v[-1] for k, v in parse_qs(parts.query).items()}
+        if method == "GET" and path in ("", "/index.html"):
+            self._page()
+            return
         try:
+            self._check_csrf(method)
             handler, arg = self._route(method, path)
             result = handler(query, arg) if arg is not None else handler(query)
             self._send(200, result)
@@ -249,8 +306,10 @@ class _Handler(BaseHTTPRequestHandler):
             ("GET", "/api/health"): self.health,
             ("POST", "/api/login"): self.login,
             ("POST", "/api/logout"): self.logout,
+            ("GET", "/api/me"): self.me,
             ("POST", "/api/password"): self.password,
             ("GET", "/api/usage"): self.usage,
+            ("GET", "/api/dashboard"): self.dashboard,
             ("GET", "/api/prices"): self.prices,
             ("GET", "/api/prices/history"): self.price_history,
             ("GET", "/api/prices/reference"): self.reference,
@@ -307,11 +366,27 @@ class _Handler(BaseHTTPRequestHandler):
             time.sleep(0.5)  # slows down guessing
             raise ApiError(401, "wrong name or password")
         token, session = found
+        if body.get("cookie"):
+            max_age = int(self.server.sessions.ttl_s)
+            self._extra_headers = [
+                (
+                    "Set-Cookie",
+                    f"{COOKIE}={token}; HttpOnly; SameSite=Strict; Path=/; Max-Age={max_age}",
+                )
+            ]
+            return {"role": session.role, "must_change": session.must_change, "name": session.name}
         return {"token": token, "role": session.role, "must_change": session.must_change}
 
     def logout(self, query: dict[str, str]) -> dict[str, Any]:
         self.server.sessions.logout(self._token())
+        self._extra_headers = [
+            ("Set-Cookie", f"{COOKIE}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0")
+        ]
         return {"ok": True}
+
+    def me(self, query: dict[str, str]) -> dict[str, Any]:
+        session = self._session(allow_must_change=True)
+        return {"name": session.name, "role": session.role, "must_change": session.must_change}
 
     def password(self, query: dict[str, str]) -> dict[str, Any]:
         session = self._session(allow_must_change=True)
@@ -357,6 +432,45 @@ class _Handler(BaseHTTPRequestHandler):
         with self.server.reader() as storage:
             statement = CostEngine(storage, self.server.tz).statement(start, end, now=now)
         return statement_dict(statement, by)
+
+    def dashboard(self, query: dict[str, str]) -> dict[str, Any]:
+        """Everything the dashboard shows, from the same computation as the CLI."""
+        from .service import health
+
+        self._session()
+        now = datetime.now(timezone.utc)
+        today = now.astimezone(self.server.tz).date()
+        since = _day(query.get("from"), "from") or today - timedelta(days=6)
+        until = _day(query.get("to"), "to") or today
+        if until < since:
+            raise ApiError(400, "to is before from")
+        if (until - since).days > 366:
+            raise ApiError(400, "pick at most one year")
+        start, end = period(now, self.server.tz, since, until)
+        with self.server.reader() as storage:
+            engine = CostEngine(storage, self.server.tz)
+            statement = engine.statement(start, end, now=now)
+            coverage = engine.coverage(start, end, now=now)
+            prices = current_prices(storage, now)
+            profiles = [
+                profile_dict(p)
+                for h in storage.get_hosts()
+                if (p := storage.get_profile(h.host.id)) is not None
+            ]
+            live, _ = effective(self.server.config, storage)
+        notes = sorted({n for line in statement.lines for n in line.notes})
+        return {
+            "from": since,
+            "to": until,
+            "days": statement_dict(statement, "day"),
+            "models": statement_dict(statement, "model"),
+            "coverage": [{"day": d, "measured_h": m, "hours": round(h, 2)} for d, m, h in coverage],
+            "notes": notes,
+            "health": health(self.server.storage_url),
+            "prices": prices,
+            "profiles": profiles,
+            "settings": live_values(live),
+        }
 
     def prices(self, query: dict[str, str]) -> dict[str, Any]:
         self._session()

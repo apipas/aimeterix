@@ -268,6 +268,34 @@ class CostEngine:
             cache[key] = _dec(seconds) / 3600
         return cache[key]
 
+    def coverage(
+        self, start: datetime, end: datetime, now: datetime | None = None
+    ) -> list[tuple[date, float, float]]:
+        """Per local day: hours the agent measured, and hours there were to measure.
+
+        With several machines, the measured hours are their average.
+        """
+        start, end = ensure_utc(start), ensure_utc(end)
+        last = min(end, ensure_utc(now) if now else datetime.now(timezone.utc))
+        hosts = self._hours(start, end)
+        measured: dict[date, float] = defaultdict(float)
+        for hours in hosts.values():
+            for ts, hour in hours.items():
+                day = ts.astimezone(self.tz).date()
+                measured[day] += min(hour.seconds, 3600.0) / 3600 / max(len(hosts), 1)
+        out = []
+        day = start.astimezone(self.tz).date()
+        while True:
+            day_start = datetime.combine(day, datetime.min.time(), self.tz)
+            if day_start.astimezone(timezone.utc) >= last:
+                break
+            day_end = datetime.combine(day + timedelta(days=1), datetime.min.time(), self.tz)
+            lo = max(day_start.astimezone(timezone.utc), start)
+            hi = min(day_end.astimezone(timezone.utc), last)
+            out.append((day, round(measured.get(day, 0.0), 2), (hi - lo).total_seconds() / 3600))
+            day += timedelta(days=1)
+        return out
+
     # computing -----------------------------------------------------------------------
 
     def statement(self, start: datetime, end: datetime, now: datetime | None = None) -> Statement:

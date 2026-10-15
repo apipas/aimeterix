@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Meterix</title>
+<style nonce="{{nonce}}">
+:root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10);
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4; --s6: #008300;
+  --s7: #6250d6; --s8: #e34948; --idle: #c3c2b7;
+  --good: #0ca30c; --good-text: #006300; --warning: #fab219; --critical: #d03b3b;
+  --accent: #2a78d6;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300;
+    --s7: #9085e9; --s8: #e66767; --idle: #5c5b57; --good-text: #0ca30c; --accent: #3987e5;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300;
+  --s7: #9085e9; --s8: #e66767; --idle: #5c5b57; --good-text: #0ca30c; --accent: #3987e5;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+header { display: flex; align-items: center; gap: 12px; padding: 12px 24px;
+  border-bottom: 1px solid var(--border); background: var(--surface); }
+header h1 { font-size: 16px; margin: 0; font-weight: 650; }
+header .who { margin-left: auto; color: var(--ink-2); }
+main { max-width: 1120px; margin: 0 auto; padding: 20px 16px 48px; }
+button, input { font: inherit; color: inherit; }
+button { border: 1px solid var(--border); background: var(--surface); border-radius: 8px;
+  padding: 6px 12px; cursor: pointer; }
+button:hover { background: var(--grid); }
+button.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); font-weight: 600; }
+button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+input { border: 1px solid var(--border); background: var(--surface); border-radius: 8px; padding: 6px 8px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+.narrow { max-width: 360px; margin: 64px auto; }
+.narrow label { display: block; margin: 12px 0 4px; color: var(--ink-2); }
+.narrow input { width: 100%; }
+.narrow button { margin-top: 16px; width: 100%; }
+.err { color: var(--critical); min-height: 1.4em; margin-top: 8px; }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px; }
+.filters .sep { width: 1px; height: 24px; background: var(--border); margin: 0 4px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.tile .label { color: var(--ink-2); font-size: 13px; }
+.tile .value { font-size: 26px; font-weight: 650; margin-top: 4px; }
+.tile .sub { color: var(--muted); font-size: 12px; }
+.grid2 { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; margin-bottom: 12px; }
+@media (max-width: 800px) { .grid2 { grid-template-columns: 1fr; } }
+h2 { font-size: 14px; font-weight: 650; margin: 0 0 12px; }
+.muted { color: var(--muted); }
+.status { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+.status svg { width: 16px; height: 16px; }
+.ok { color: var(--good-text); }
+.bad { color: var(--critical); }
+ul.plain { list-style: none; padding: 0; margin: 8px 0 0; }
+ul.plain li { display: flex; justify-content: space-between; padding: 4px 0; border-top: 1px solid var(--grid); }
+.legend { display: flex; flex-wrap: wrap; gap: 12px; margin: 4px 0 8px; color: var(--ink-2); font-size: 12px; }
+.legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px;
+  margin-right: 6px; vertical-align: -1px; background: var(--key); }
+.chart { position: relative; }
+.chart svg { display: block; width: 100%; height: 240px; overflow: visible; }
+.chart text { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.tip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.12); font-size: 12px;
+  white-space: nowrap; display: none; z-index: 2; }
+.tip b { font-size: 14px; display: block; }
+.tip .k { display: inline-block; width: 12px; height: 2px; margin-right: 6px; vertical-align: 3px; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th, td { text-align: right; padding: 6px 8px; border-top: 1px solid var(--grid); white-space: nowrap; }
+th { color: var(--ink-2); font-weight: 600; border-top: 0; }
+th:first-child, td:first-child { text-align: left; }
+tr.total td { font-weight: 650; border-top: 1px solid var(--axis); }
+.scroll { overflow-x: auto; }
+.cov { display: grid; grid-template-columns: 90px 1fr 110px; gap: 8px; align-items: center; padding: 3px 0; }
+.cov .bar { height: 8px; background: var(--grid); border-radius: 4px; overflow: hidden; }
+.cov .bar i { display: block; height: 100%; background: var(--s1); border-radius: 4px; }
+details summary { cursor: pointer; color: var(--ink-2); margin-top: 8px; }
+.section { margin-bottom: 12px; }
+.loading { opacity: 0.55; transition: opacity .15s; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>AI Meterix</h1>
+  <span class="who" id="who"></span>
+  <button id="logout" hidden>Log out</button>
+</header>
+<main>
+  <section id="login" class="card narrow" hidden>
+    <h2>Log in</h2>
+    <form id="login-form">
+      <label for="name">Account</label><input id="name" autocomplete="username" value="user" required>
+      <label for="password">Password</label><input id="password" type="password" autocomplete="current-password" required>
+      <button class="primary" type="submit">Log in</button>
+      <div class="err" id="login-err"></div>
+    </form>
+  </section>
+
+  <section id="change" class="card narrow" hidden>
+    <h2>Choose a new password</h2>
+    <p class="muted">This account still has its first password. Pick a new one (at least 8 characters).</p>
+    <form id="change-form">
+      <label for="old">Current password</label><input id="old" type="password" autocomplete="current-password" required>
+      <label for="new1">New password</label><input id="new1" type="password" autocomplete="new-password" required>
+      <label for="new2">New password again</label><input id="new2" type="password" autocomplete="new-password" required>
+      <button class="primary" type="submit">Save</button>
+      <div class="err" id="change-err"></div>
+    </form>
+  </section>
+
+  <section id="dash" hidden>
+    <div class="filters" id="filters">
+      <button data-days="1">Today</button>
+      <button data-days="7">Last 7 days</button>
+      <button data-days="30">Last 30 days</button>
+      <button data-days="90">Last 90 days</button>
+      <span class="sep"></span>
+      <input type="date" id="from" aria-label="From"> <span class="muted">to</span>
+      <input type="date" id="to" aria-label="To">
+      <button id="apply">Show</button>
+    </div>
+
+    <div id="content">
+      <div class="tiles">
+        <div class="card tile"><div class="label">Cost</div><div class="value" id="t-cost">-</div><div class="sub" id="t-cost-sub"></div></div>
+        <div class="card tile"><div class="label">Energy</div><div class="value" id="t-energy">-</div><div class="sub" id="t-energy-sub"></div></div>
+        <div class="card tile"><div class="label">Tokens</div><div class="value" id="t-tokens">-</div><div class="sub" id="t-tokens-sub"></div></div>
+        <div class="card tile"><div class="label">LLM calls</div><div class="value" id="t-calls">-</div><div class="sub" id="t-calls-sub"></div></div>
+      </div>
+
+      <div class="grid2">
+        <div class="card">
+          <h2>Energy per day (Wh)</h2>
+          <div class="legend" id="legend"></div>
+          <div class="chart" id="chart"><div class="tip" id="tip"></div></div>
+          <details><summary>Show as a table</summary><div class="scroll" id="chart-table"></div></details>
+        </div>
+        <div class="card">
+          <h2>Is it measuring?</h2>
+          <div id="health"></div>
+        </div>
+      </div>
+
+      <div class="card section">
+        <h2>Usage per model</h2>
+        <div class="scroll" id="models"></div>
+        <div class="muted" id="model-notes"></div>
+      </div>
+
+      <div class="grid2">
+        <div class="card">
+          <h2>Data coverage</h2>
+          <p class="muted" id="cov-sum"></p>
+          <div id="coverage"></div>
+        </div>
+        <div class="card">
+          <h2>Data issues</h2>
+          <ul class="plain" id="issues"></ul>
+        </div>
+      </div>
+
+      <div class="card section">
+        <h2>Prices, profile and settings</h2>
+        <p class="muted">Read-only here. Change them with <code>aimeterix prices</code>, <code>aimeterix profile</code> and <code>aimeterix config</code>, or the admin API.</p>
+        <details><summary>Prices per 1M tokens</summary><div class="scroll" id="prices"></div></details>
+        <details><summary>Cost profile</summary><div class="scroll" id="profile"></div></details>
+        <details><summary>Live settings</summary><div class="scroll" id="settings"></div></details>
+      </div>
+    </div>
+  </section>
+</main>
+<script nonce="{{nonce}}">
+"use strict";
+const $ = (id) => document.getElementById(id);
+// models take the categorical slots in order; "(other apps)" keeps slot 2, idle is gray
+const SERIES = ["--s1","--s3","--s4","--s5","--s6","--s7"];
+let range = { days: 7 };
+let lastData = null;
+
+async function api(method, path, body) {
+  const opts = { method, credentials: "same-origin", headers: {} };
+  if (method !== "GET") opts.headers["X-AIMeterix"] = "1";
+  if (body !== undefined) { opts.headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(body); }
+  const res = await fetch(path, opts);
+  let data = {};
+  try { data = await res.json(); } catch (e) { /* empty body */ }
+  return { status: res.status, data };
+}
+
+function show(view) {
+  for (const id of ["login", "change", "dash"]) $(id).hidden = id !== view;
+  $("logout").hidden = view === "login";
+}
+
+function el(tag, text, cls) {
+  const e = document.createElement(tag);
+  if (text !== undefined && text !== null) e.textContent = text;
+  if (cls) e.className = cls;
+  return e;
+}
+
+const num = (v) => (v === null || v === undefined || v === "" ? null : Number(v));
+const fmtInt = (v) => (v === null ? "-" : Math.round(v).toLocaleString());
+function fmtMoney(v, cur) {
+  if (v === null) return "-";
+  const digits = Math.abs(v) >= 1 ? 2 : 4;
+  return (cur === "USD" ? "$" : "") + v.toFixed(digits) + (cur && cur !== "USD" ? " " + cur : "");
+}
+const fmtWh = (kwh) => (kwh === null ? "-" : (kwh * 1000 >= 1000 ? (kwh).toFixed(2) + " kWh" : (kwh * 1000).toFixed(1) + " Wh"));
+function ago(iso) {
+  if (!iso) return "none in the last 6 h";
+  const s = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (s < 120) return "just now";
+  if (s < 7200) return Math.round(s / 60) + " min ago";
+  return Math.round(s / 3600) + " h ago";
+}
+const isoDay = (d) => d.toLocaleDateString("en-CA");
+
+function statusBadge(ok, label) {
+  const span = el("span", null, "status " + (ok ? "ok" : "bad"));
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", "0 0 16 16");
+  const c = document.createElementNS(ns, "circle");
+  c.setAttribute("cx", "8"); c.setAttribute("cy", "8"); c.setAttribute("r", "7");
+  c.setAttribute("fill", "currentColor");
+  const p = document.createElementNS(ns, "path");
+  p.setAttribute("d", ok ? "M4.5 8.2l2.3 2.3 4.7-4.8" : "M5.2 5.2l5.6 5.6M10.8 5.2l-5.6 5.6");
+  p.setAttribute("stroke", "#fff"); p.setAttribute("stroke-width", "1.8"); p.setAttribute("fill", "none");
+  svg.append(c, p);
+  span.append(svg, el("span", label));
+  return span;
+}
+
+function table(headers, rows, totalRow) {
+  const t = el("table");
+  const tr = el("tr");
+  for (const h of headers) tr.append(el("th", h));
+  t.append(tr);
+  for (const r of rows) {
+    const row = el("tr");
+    for (const c of r) row.append(el("td", c));
+    t.append(row);
+  }
+  if (totalRow) {
+    const row = el("tr", null, "total");
+    for (const c of totalRow) row.append(el("td", c));
+    t.append(row);
+  }
+  return t;
+}
+
+// --- views -----------------------------------------------------------------------
+
+async function boot() {
+  const me = await api("GET", "/api/me");
+  if (me.status !== 200) { show("login"); $("password").focus(); return; }
+  $("who").textContent = me.data.name + " (" + me.data.role + ")";
+  if (me.data.must_change) { show("change"); return; }
+  show("dash");
+  setRange(7);
+}
+
+$("login-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("login-err").textContent = "";
+  const r = await api("POST", "/api/login", { name: $("name").value, password: $("password").value, cookie: true });
+  if (r.status !== 200) { $("login-err").textContent = r.data.error || "could not log in"; return; }
+  $("password").value = "";
+  $("old").value = "";
+  boot();
+});
+
+$("change-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("change-err").textContent = "";
+  if ($("new1").value !== $("new2").value) { $("change-err").textContent = "the two new passwords differ"; return; }
+  const r = await api("POST", "/api/password", { old: $("old").value, password: $("new1").value });
+  if (r.status !== 200) { $("change-err").textContent = r.data.error || "could not change it"; return; }
+  for (const id of ["old", "new1", "new2"]) $(id).value = "";
+  boot();
+});
+
+$("logout").addEventListener("click", async () => {
+  await api("POST", "/api/logout");
+  $("who").textContent = "";
+  show("login");
+});
+
+for (const b of document.querySelectorAll("#filters [data-days]")) {
+  b.addEventListener("click", () => setRange(Number(b.dataset.days)));
+}
+$("apply").addEventListener("click", () => {
+  if ($("from").value && $("to").value) { range = { from: $("from").value, to: $("to").value }; markRange(); load(); }
+});
+
+function setRange(days) {
+  const to = new Date();
+  const from = new Date(); from.setDate(to.getDate() - (days - 1));
+  range = { days, from: isoDay(from), to: isoDay(to) };
+  $("from").value = range.from; $("to").value = range.to;
+  markRange();
+  load();
+}
+function markRange() {
+  for (const b of document.querySelectorAll("#filters [data-days]")) {
+    b.classList.toggle("on", Number(b.dataset.days) === range.days);
+  }
+}
+
+async function load() {
+  $("content").classList.add("loading");
+  const r = await api("GET", "/api/dashboard?from=" + encodeURIComponent(range.from) + "&to=" + encodeURIComponent(range.to));
+  $("content").classList.remove("loading");
+  if (r.status === 401) { show("login"); return; }
+  if (r.status !== 200) { alert(r.data.error || "could not load the data"); return; }
+  render(r.data);
+}
+
+function render(d) {
+  lastData = d;
+  const cur = d.days.currency || "";
+  const total = d.days.total;
+  const tokens = ["input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens"]
+    .reduce((s, k) => s + (num(total[k]) || 0), 0);
+  $("t-cost").textContent = fmtMoney(num(total.cost), cur);
+  $("t-cost-sub").textContent = cur ? "energy " + fmtMoney(num(total.energy_cost), cur) + ", tokens " + fmtMoney(num(total.token_cost), cur) : "no cost profile yet";
+  $("t-energy").textContent = fmtWh(num(total.kwh));
+  $("t-energy-sub").textContent = "measured on this machine";
+  $("t-tokens").textContent = fmtInt(tokens);
+  $("t-tokens-sub").textContent = fmtInt(num(total.input_tokens)) + " in, " + fmtInt(num(total.output_tokens)) + " out";
+  $("t-calls").textContent = fmtInt(num(total.requests));
+  $("t-calls-sub").textContent = "through the proxy";
+  renderChart(d);
+  renderHealth(d.health);
+  renderModels(d.models, cur);
+  renderCoverage(d.coverage);
+  renderIssues(d);
+  renderSettings(d);
+}
+
+// --- energy per day: stacked bars ------------------------------------------------
+
+function renderChart(d) {
+  const lines = d.days.lines;
+  const days = d.coverage.map((c) => c.day);
+  const names = [];
+  for (const l of lines) if (!names.includes(l.model) && num(l.kwh) > 0) names.push(l.model);
+  const special = ["(other apps)", "(idle overhead)"];
+  names.sort((a, b) => special.indexOf(a) - special.indexOf(b));
+  const models = names.filter((n) => !special.includes(n));
+  const order = [...models.slice(0, 6), ...names.filter((n) => special.includes(n))];
+  const color = (n) => n === "(idle overhead)" ? "var(--idle)"
+    : n === "(other apps)" ? "var(--s2)" : "var(" + SERIES[Math.min(models.indexOf(n), 5)] + ")";
+  const cap = models.length > 6 ? 5 : 6; // past six models, the rest fold into one series
+  const name = (n) => models.length > 6 && models.indexOf(n) === cap ? "other models" : n;
+  const byDay = {};
+  for (const day of days) byDay[day] = {};
+  for (const l of lines) {
+    if (!(l.day in byDay)) continue;
+    const key = models.indexOf(l.model) >= cap ? models[cap] : l.model;
+    byDay[l.day][key] = (byDay[l.day][key] || 0) + num(l.kwh) * 1000;
+  }
+  const legend = $("legend"); legend.replaceChildren();
+  for (const n of order) {
+    const s = el("span", name(n)); s.style.setProperty("--key", color(n)); legend.append(s);
+  }
+
+  const wrap = $("chart");
+  const old = wrap.querySelector("svg"); if (old) old.remove();
+  const ns = "http://www.w3.org/2000/svg";
+  const W = Math.max(wrap.clientWidth, 300), H = 240, L = 44, B = 22, T = 8;
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+  svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", "Energy per day in watt-hours, stacked by model, other apps and idle");
+  const max = Math.max(1e-9, ...days.map((day) => order.reduce((s, n) => s + (byDay[day][n] || 0), 0)));
+  const step = niceStep(max / 4);
+  const top = Math.ceil(max / step) * step;
+  const y = (v) => H - B - (v / top) * (H - B - T);
+  for (let v = 0; v <= top + 1e-9; v += step) {
+    const g = document.createElementNS(ns, "line");
+    g.setAttribute("x1", L); g.setAttribute("x2", W); g.setAttribute("y1", y(v)); g.setAttribute("y2", y(v));
+    g.setAttribute("stroke", v === 0 ? "var(--axis)" : "var(--grid)"); g.setAttribute("stroke-width", "1");
+    svg.append(g);
+    const t = document.createElementNS(ns, "text");
+    t.setAttribute("x", L - 6); t.setAttribute("y", y(v) + 4); t.setAttribute("text-anchor", "end");
+    t.textContent = v >= 100 ? Math.round(v) : +v.toFixed(2);
+    svg.append(t);
+  }
+  const slot = (W - L) / Math.max(days.length, 1);
+  const bw = Math.min(40, Math.max(4, slot * 0.6));
+  const labelEvery = Math.ceil(days.length / Math.max(1, Math.floor((W - L) / 70)));
+  days.forEach((day, i) => {
+    const x = L + slot * i + (slot - bw) / 2;
+    let acc = 0;
+    const segs = order.filter((n) => (byDay[day][n] || 0) > 0);
+    segs.forEach((n, j) => {
+      const v = byDay[day][n];
+      const y0 = y(acc), y1 = y(acc + v);
+      const h = Math.max(0, y0 - y1 - (j < segs.length - 1 ? 2 : 0));
+      const r = document.createElementNS(ns, "rect");
+      r.setAttribute("x", x); r.setAttribute("width", bw);
+      r.setAttribute("y", y1); r.setAttribute("height", Math.max(h, 0.5));
+      r.setAttribute("fill", color(n));
+      if (j === segs.length - 1) { r.setAttribute("rx", "3"); }
+      svg.append(r);
+      acc += v;
+    });
+    const hit = document.createElementNS(ns, "rect");
+    hit.setAttribute("x", L + slot * i); hit.setAttribute("width", slot);
+    hit.setAttribute("y", T); hit.setAttribute("height", H - B - T);
+    hit.setAttribute("fill", "transparent"); hit.setAttribute("tabindex", "0");
+    const showTip = () => tooltip(day, segs.map((n) => [name(n), byDay[day][n], color(n)]), x + bw / 2, W);
+    hit.addEventListener("pointermove", showTip); hit.addEventListener("focus", showTip);
+    hit.addEventListener("pointerleave", () => { $("tip").style.display = "none"; });
+    hit.addEventListener("blur", () => { $("tip").style.display = "none"; });
+    svg.append(hit);
+    if (i % labelEvery === 0) {
+      const t = document.createElementNS(ns, "text");
+      t.setAttribute("x", L + slot * i + slot / 2); t.setAttribute("y", H - 6); t.setAttribute("text-anchor", "middle");
+      t.textContent = day.slice(5);
+      svg.append(t);
+    }
+  });
+  wrap.prepend(svg);
+
+  const rows = days.map((day) => [day, ...order.map((n) => (byDay[day][n] || 0).toFixed(1))]);
+  $("chart-table").replaceChildren(table(["Day", ...order.map(name)], rows));
+}
+
+function niceStep(raw) {
+  const p = Math.pow(10, Math.floor(Math.log10(raw)));
+  for (const m of [1, 2, 2.5, 5, 10]) if (raw <= m * p) return m * p;
+  return 10 * p;
+}
+
+function tooltip(day, rows, x, W) {
+  const tip = $("tip");
+  tip.replaceChildren(el("div", day, "muted"));
+  let total = 0;
+  for (const [n, v, c] of rows) {
+    total += v;
+    const line = el("div");
+    const k = el("span", null, "k"); k.style.background = c;
+    line.append(k, el("strong", v.toFixed(1) + " Wh"), document.createTextNode(" " + n));
+    tip.append(line);
+  }
+  if (!rows.length) tip.append(el("div", "nothing measured"));
+  else tip.append(el("div", "total " + total.toFixed(1) + " Wh", "muted"));
+  tip.style.display = "block";
+  const left = Math.min(Math.max(x - tip.offsetWidth / 2, 0), W - tip.offsetWidth);
+  tip.style.left = left + "px"; tip.style.top = "0px";
+}
+
+// --- other panels ----------------------------------------------------------------
+
+function renderHealth(h) {
+  const box = $("health"); box.replaceChildren();
+  box.append(statusBadge(h.ok, h.ok ? "Healthy" : "Needs attention"));
+  const ul = el("ul", null, "plain");
+  for (const p of h.processes) {
+    const li = el("li");
+    const up = p.uptime_s ? Math.floor(p.uptime_s / 3600) + " h " + Math.floor((p.uptime_s % 3600) / 60) + " min" : "";
+    li.append(el("span", p.name), el("span", p.running ? "running " + up : "stopped", p.running ? "ok" : "bad"));
+    ul.append(li);
+  }
+  const db = h.database;
+  for (const [k, v] of [
+    ["database", db.ok ? "ok" + (db.size_bytes ? ", " + (db.size_bytes / 1e6).toFixed(1) + " MB" : "") : "not ok"],
+    ["last hardware sample", ago(h.last_sample)],
+    ["last proxied call", ago(h.last_call)],
+  ]) { const li = el("li"); li.append(el("span", k), el("span", v)); ul.append(li); }
+  box.append(ul);
+  if (h.problems.length) {
+    const p = el("p", h.problems.join("; "), "bad");
+    box.append(p);
+    box.append(el("p", "Run aimeterix start, then aimeterix health.", "muted"));
+  }
+}
+
+function renderModels(m, cur) {
+  const cols = ["Model", "Source", "Calls", "Input", "Output", "Cache read", "Cache write", "Wh", "Cost"];
+  const cell = (v) => (v === null || v === undefined ? "-" : fmtInt(num(v)));
+  const row = (l) => [
+    l.model + (l.notes.length ? " *" : ""), l.provider || l.source || "", fmtInt(l.requests),
+    cell(l.input_tokens), cell(l.output_tokens), cell(l.cache_read_tokens), cell(l.cache_write_tokens),
+    (num(l.kwh) * 1000).toFixed(1), fmtMoney(num(l.cost), cur),
+  ];
+  const t = m.total;
+  $("models").replaceChildren(table(cols, m.lines.map(row), [
+    "Total", "", fmtInt(t.requests), cell(t.input_tokens), cell(t.output_tokens),
+    cell(t.cache_read_tokens), cell(t.cache_write_tokens), (num(t.kwh) * 1000).toFixed(1), fmtMoney(num(t.cost), cur),
+  ]));
+  $("model-notes").textContent = "'-' means the provider reports no such count (not 0). * see Data issues. Local model cost is its share of the measured energy, an estimate.";
+}
+
+function renderCoverage(cov) {
+  const box = $("coverage"); box.replaceChildren();
+  let m = 0, h = 0;
+  for (const c of cov) {
+    m += c.measured_h; h += c.hours;
+    const row = el("div", null, "cov");
+    const bar = el("div", null, "bar"); const fill = el("i");
+    fill.style.width = (c.hours ? Math.min(100, 100 * c.measured_h / c.hours) : 0) + "%";
+    bar.append(fill);
+    row.append(el("span", c.day), bar, el("span", c.measured_h.toFixed(1) + " of " + c.hours.toFixed(0) + " h", "muted"));
+    box.append(row);
+  }
+  $("cov-sum").textContent = h ? "The agent measured " + (100 * m / h).toFixed(0) + "% of the hours in this range. Hours it did not run are not counted." : "No hours in this range yet.";
+}
+
+function renderIssues(d) {
+  const ul = $("issues"); ul.replaceChildren();
+  const text = {
+    "price not set": "A paid model has no price yet; its tokens show as $0 until the admin sets one (aimeterix prices).",
+    "energy share is an estimate": "Local model cost is its share of the measured energy, an estimate.",
+    "no cost profile": "No cost profile: energy is shown but not priced (aimeterix profile set --rate ...).",
+    "batch tokens not metered yet": "Batch jobs are seen, but their tokens are not metered yet.",
+  };
+  const items = d.notes.map((n) => text[n] || n);
+  const gaps = d.coverage.filter((c) => c.hours >= 1 && c.measured_h < c.hours * 0.9);
+  if (gaps.length) items.push(gaps.length + " day(s) with less than 90% of hours measured.");
+  if (!items.length) items.push("Nothing to report.");
+  for (const t of items) ul.append(el("li", t));
+}
+
+function renderSettings(d) {
+  $("prices").replaceChildren(table(["Model", "Source", "Input", "Output", "Cache read", "Cache write", "Set"],
+    d.prices.map((p) => [p.model, p.source, p.input_per_m, p.output_per_m, p.cache_read_per_m, p.cache_write_per_m, p.price_set ? "yes" : "not yet"])));
+  $("profile").replaceChildren(table(["Machine", "Name", "Rate per kWh", "PUE", "Fees per month", "Version"],
+    d.profiles.map((p) => [p.host, p.name, p.rate_per_kwh + " " + p.currency, p.pue, p.fees_per_month + " " + p.currency, String(p.version)])));
+  $("settings").replaceChildren(table(["Setting", "Value"],
+    Object.entries(d.settings).map(([k, v]) => [k, JSON.stringify(v)])));
+}
+
+window.addEventListener("resize", () => { if (lastData && !$("dash").hidden) renderChart(lastData); });
+boot();
+</script>
+</body>
+</html>
