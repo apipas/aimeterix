@@ -37,7 +37,7 @@ from decimal import Decimal
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from ai_meterix.core.model import CURRENCY, CostProfile, FeeSpread, ModelPrice
+from ai_meterix.core.model import CURRENCY, CostProfile, FeeSpread, ModelPrice, ProviderKind
 from ai_meterix.core.timeutil import ensure_utc
 from ai_meterix.pricing.prices import base_model, price_at
 from ai_meterix.storage.base import Dataset, StorageReader, UsageQuery
@@ -306,6 +306,9 @@ class CostEngine:
         lines: dict[tuple[date, str, str, str], UsageLine] = {}
         currencies: set[str] = set()
         local_names = {m.model_name for m in self.storage.get_local_models()}
+        local_providers = {"local"} | {
+            p.name for p in self.storage.get_providers() if p.kind is ProviderKind.LOCAL
+        }
 
         def line(day: date, model: str, source: str, provider: str = "") -> UsageLine:
             key = (day, model, source, provider)
@@ -338,7 +341,7 @@ class CostEngine:
         for r in calls:
             ts = r["bucket"]
             day = ts.astimezone(self.tz).date()
-            local = r["provider"] == "local" or r["model"] in local_names
+            local = r["provider"] in local_providers or r["model"] in local_names
             source = "local" if local else "api"
             target = line(day, r["model"], source, "" if local else r["provider"])
             rows = prices.get(r["model"]) or prices.get(base_model(r["model"]), [])

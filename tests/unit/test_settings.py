@@ -76,7 +76,7 @@ def test_parse_value_reads_json_or_text() -> None:
     assert parse_value("agent.interval_s", "5") == 5
     assert parse_value("proxy.default_upstream", "null") is None
     assert parse_value("proxy.default_upstream", "http://x") == "http://x"
-    assert parse_value("proxy.upstreams", '{"local": "http://x"}') == {"local": "http://x"}
+    assert parse_value("proxy.allowed_key_hashes", '["ab"]') == ["ab"]
     with pytest.raises(ValueError, match="unknown setting"):
         parse_value("nope", "1")
 

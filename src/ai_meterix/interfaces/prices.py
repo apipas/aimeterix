@@ -9,7 +9,8 @@ from decimal import Decimal
 from ai_meterix.core.model import ModelPrice, PriceChange
 from ai_meterix.pricing.prices import Applied, ReferenceList
 
-_HEADER = ("Model", "Source", "Input", "Output", "Cache read", "Cache write", "Since")
+_HEADER = ("Model", "Provider", "Source", "Input", "Output", "Cache read", "Cache write", "Since")
+_TEXT_COLUMNS = 3
 
 
 def _money(value: Decimal) -> str:
@@ -21,7 +22,7 @@ def _table(rows: Sequence[Sequence[str]]) -> list[str]:
     out = []
     for row in rows:
         cells = [
-            c.ljust(w) if i < 2 else c.rjust(w)
+            c.ljust(w) if i < _TEXT_COLUMNS else c.rjust(w)
             for i, (c, w) in enumerate(zip(row, widths, strict=True))
         ]
         out.append("  ".join(cells).rstrip())
@@ -39,11 +40,14 @@ def render_prices(
         since = p.valid_from.astimezone(tz).strftime("%Y-%m-%d")
         if p.source.value == "api" and not p.price_set:
             unset = True
-            rows.append((p.model, p.source.value, "not set", "-", "-", "-", since))
+            rows.append(
+                (p.model, p.provider or "-", p.source.value, "not set", "-", "-", "-", since)
+            )
             continue
         rows.append(
             (
                 p.model,
+                p.provider or "-",
                 p.source.value,
                 _money(p.input_per_m),
                 _money(p.output_per_m),
@@ -60,7 +64,8 @@ def render_prices(
     if unset:
         lines.append("'not set' = an API model nobody priced yet; its cost shows as 0, marked")
     lines.append(
-        f"Reference list: {len(reference.models)} OpenAI and Anthropic models, "
+        f"Reference list: {len(reference.models)} models of "
+        f"{len({r.provider for r in reference.models})} providers, "
         f"checked {reference.checked}, in {reference.currency}. "
         "See `aimeterix prices reference`."
     )
@@ -79,6 +84,7 @@ def render_reference(reference: ReferenceList) -> str:
             (
                 r.model,
                 r.provider,
+                "api",
                 _money(r.input_per_m),
                 _money(r.output_per_m),
                 _money(r.cache_read_per_m),

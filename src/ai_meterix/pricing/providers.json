@@ -1,0 +1,15 @@
+{
+  "checked": "2026-10-15",
+  "providers": [
+    {"name": "openai", "label": "OpenAI", "base_url": "https://api.openai.com", "app_path": "/v1", "format": "openai", "pricing": "https://developers.openai.com/api/docs/pricing"},
+    {"name": "anthropic", "label": "Anthropic", "base_url": "https://api.anthropic.com", "app_path": "", "format": "anthropic", "pricing": "https://platform.claude.com/docs/en/about-claude/pricing"},
+    {"name": "gemini", "label": "Google Gemini API", "base_url": "https://generativelanguage.googleapis.com", "app_path": "/v1beta", "format": "gemini", "pricing": "https://ai.google.dev/gemini-api/docs/pricing"},
+    {"name": "mistral", "label": "Mistral", "base_url": "https://api.mistral.ai", "app_path": "/v1", "format": "openai", "pricing": "https://docs.mistral.ai/inference/pricing"},
+    {"name": "groq", "label": "Groq", "base_url": "https://api.groq.com", "app_path": "/openai/v1", "format": "openai", "pricing": "https://console.groq.com/docs/models"},
+    {"name": "together", "label": "Together AI", "base_url": "https://api.together.ai", "app_path": "/v1", "format": "openai", "pricing": "https://docs.together.ai/docs/serverless/models"},
+    {"name": "fireworks", "label": "Fireworks AI", "base_url": "https://api.fireworks.ai", "app_path": "/inference/v1", "format": "openai", "pricing": "https://docs.fireworks.ai/serverless/pricing"},
+    {"name": "openrouter", "label": "OpenRouter", "base_url": "https://openrouter.ai", "app_path": "/api/v1", "format": "openai", "pricing": "https://openrouter.ai/models"},
+    {"name": "deepseek", "label": "DeepSeek", "base_url": "https://api.deepseek.com", "app_path": "", "format": "openai", "pricing": "https://api-docs.deepseek.com/quick_start/pricing/"},
+    {"name": "xai", "label": "xAI (Grok)", "base_url": "https://api.x.ai", "app_path": "/v1", "format": "openai", "pricing": "https://docs.x.ai/developers/models"}
+  ]
+}

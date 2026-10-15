@@ -11,7 +11,9 @@ same meaning per field:
 Where the counts come from (input is always the uncached part):
 
 - OpenAI Chat Completions, and the OpenAI-style endpoints of vLLM, Ollama and
-  llama.cpp: ``prompt_tokens`` minus ``prompt_tokens_details.cached_tokens``;
+  llama.cpp: ``prompt_tokens`` minus ``prompt_tokens_details.cached_tokens``
+  (DeepSeek: ``prompt_cache_hit_tokens``); Mistral, Groq, Together, Fireworks,
+  OpenRouter and xAI use this format too;
 - OpenAI Responses: ``input_tokens`` minus ``input_tokens_details.cached_tokens``;
 - Anthropic Messages: ``input_tokens`` already excludes the cache, which is
   ``cache_read_input_tokens`` and ``cache_creation_input_tokens``;
@@ -193,7 +195,18 @@ def _minus(total: int | None, part: int | None) -> int | None:
 def _normalize(u: Usage, anthropic: bool) -> None:
     raw = u.raw
     if "usage.prompt_tokens" in raw or "usage.completion_tokens" in raw:  # Chat Completions
-        cached = _int(raw, "usage.prompt_tokens_details.cached_tokens")
+        cached = next(  # DeepSeek names it prompt_cache_hit_tokens, in either place
+            (
+                value
+                for key in (
+                    "usage.prompt_tokens_details.cached_tokens",
+                    "usage.prompt_cache_hit_tokens",
+                    "usage.prompt_tokens_details.prompt_cache_hit_tokens",
+                )
+                if (value := _int(raw, key)) is not None
+            ),
+            None,
+        )
         u.input_tokens = _minus(_int(raw, "usage.prompt_tokens"), cached)
         u.output_tokens = _int(raw, "usage.completion_tokens")
         u.reasoning_tokens = _int(raw, "usage.completion_tokens_details.reasoning_tokens")

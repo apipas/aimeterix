@@ -15,7 +15,8 @@ aimeterix proxy --upstream http://127.0.0.1:8080   # meter a local llama.cpp ser
 aimeterix profile set --rate 0.33 --fees 0   # your energy price and fees, in USD
 aimeterix usage                  # tokens, Wh and cost per model and day
 aimeterix prices                 # price per 1M tokens for each model
-aimeterix prices apply-reference # copy the dated OpenAI/Anthropic list (see `prices reference`)
+aimeterix providers              # the AI providers apps can call through the proxy, local and cloud
+aimeterix prices apply-reference # copy the dated list of public prices (see `prices reference`)
 aimeterix serve                  # JSON API on http://127.0.0.1:8788/api with login
 aimeterix config                 # live settings; `config set agent.interval_s 5`
 aimeterix start                  # agent, proxy and API in the background (logs in ~/.aimeterix/logs)
@@ -23,7 +24,9 @@ aimeterix health                 # is everything running and measuring now? (exi
 aimeterix stop                   # stop them; buffers are written first (--keep-proxy keeps apps working)
 ```
 
-The first start of the agent, proxy or API copies the live settings (sampling interval, retention, proxy routes and key allowlist) from `aimeterix.yaml` into the database. From then on the database wins: change them with `aimeterix config set KEY VALUE` or `PUT /api/config/<key>`, and the agent and proxy pick the change up within a minute, without a restart. `aimeterix config history` shows who changed what; `aimeterix config export FILE` writes the settings back to YAML. The database URL, addresses and ports, and secrets stay in the file or environment.
+The first start of the agent, proxy or API copies the live settings (sampling interval, retention, default upstream and key allowlist) from `aimeterix.yaml` into the database. From then on the database wins: change them with `aimeterix config set KEY VALUE` or `PUT /api/config/<key>`, and the agent and proxy pick the change up within a minute, without a restart. `aimeterix config history` shows who changed what; `aimeterix config export FILE` writes the settings back to YAML. The database URL, addresses and ports, and secrets stay in the file or environment.
+
+Ten cloud providers are built in: OpenAI, Anthropic, Google Gemini, Mistral, Groq, Together AI, Fireworks AI, OpenRouter, DeepSeek and xAI. Point an app's base URL at the address `aimeterix providers` shows, e.g. `http://127.0.0.1:8787/groq/openai/v1`; its API key passes through and is never stored. Add any other provider or a local model server with `aimeterix providers add NAME --base-url URL`, and price its models with `aimeterix prices set MODEL --provider NAME`. A model with no price costs 0.
 
 After `aimeterix start`, open the dashboard at http://127.0.0.1:8788/ (cost, energy, tokens and calls per day and per model, data coverage, health). It is read-only; change settings with `aimeterix config` or the API.
 

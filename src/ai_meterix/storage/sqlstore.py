@@ -37,6 +37,7 @@ from ai_meterix.core.model import (
     PriceChange,
     ProcessSample,
     Project,
+    Provider,
     Setting,
     SettingChange,
     User,
@@ -168,6 +169,15 @@ MIGRATIONS: tuple[str, ...] = (
             UNION SELECT ts - ts % 3600000 AS h FROM process_samples
             UNION SELECT ts - ts % 3600000 AS h FROM llm_calls
         ) hours
+    """,
+    # v3: AI providers (record 0018); a price row names its provider
+    """
+    CREATE TABLE providers (
+        name {TEXT} PRIMARY KEY, label {TEXT} NOT NULL, base_url {TEXT} NOT NULL,
+        kind {TEXT} NOT NULL, app_path {TEXT} NOT NULL, api_format {TEXT} NOT NULL,
+        enabled {BIGINT} NOT NULL, built_in {BIGINT} NOT NULL, version {BIGINT} NOT NULL
+    );
+    ALTER TABLE model_prices ADD COLUMN provider {TEXT} DEFAULT ''
     """,
 )
 LATEST_VERSION = len(MIGRATIONS)
@@ -470,12 +480,12 @@ class SQLStorage:
 
     _PRICE_COLUMNS = (
         "model, valid_from, source, input_per_m, output_per_m, cache_read_per_m, "
-        "cache_write_per_m, valid_to, price_set"
+        "cache_write_per_m, valid_to, price_set, provider"
     )
 
     @staticmethod
     def _price(row: Sequence[Any]) -> ModelPrice:
-        model, valid_from, source, inp, out, cread, cwrite, valid_to, price_set = row
+        model, valid_from, source, inp, out, cread, cwrite, valid_to, price_set, provider = row
         return ModelPrice(
             model,
             source,
@@ -486,6 +496,7 @@ class SQLStorage:
             Decimal(cwrite),
             _dt(valid_to),
             bool(price_set),
+            provider or "",
         )
 
     def get_prices(self, model: str | None = None) -> list[ModelPrice]:
@@ -507,6 +518,31 @@ class SQLStorage:
         return [
             PriceChange(from_epoch_ms(ts), by, m, f, old, new)
             for ts, by, m, f, old, new in self._query(sql + " ORDER BY seq", params)
+        ]
+
+    _PROVIDER_COLUMNS = (
+        "name, base_url, kind, label, app_path, api_format, enabled, built_in, version"
+    )
+
+    @staticmethod
+    def _provider(row: Sequence[Any]) -> Provider:
+        name, base_url, kind, label, app_path, api_format, enabled, built_in, version = row
+        return Provider(
+            name,
+            base_url,
+            kind,
+            label,
+            app_path,
+            api_format,
+            bool(enabled),
+            bool(built_in),
+            int(version),
+        )
+
+    def get_providers(self) -> list[Provider]:
+        return [
+            self._provider(row)
+            for row in self._query(f"SELECT {self._PROVIDER_COLUMNS} FROM providers ORDER BY name")
         ]
 
     def get_settings(self) -> dict[str, Setting]:
@@ -848,6 +884,7 @@ class SQLStorage:
             "cache_write_per_m",
             "valid_to",
             "price_set",
+            "provider",
         )
         columns = (
             "model",
@@ -859,6 +896,7 @@ class SQLStorage:
             "cache_write_per_m",
             "valid_to",
             "price_set",
+            "provider",
         )
         values = (
             price.model,
@@ -870,6 +908,7 @@ class SQLStorage:
             str(price.cache_write_per_m),
             None if price.valid_to is None else to_epoch_ms(price.valid_to),
             int(price.price_set),
+            price.provider,
         )
 
         def body() -> None:
@@ -912,6 +951,62 @@ class SQLStorage:
             )
             self._log_setting(to_epoch_ms(utc_now()), by, key, old, new)
             return Setting(key, json.loads(new), version)
+
+        return self._write(body)
+
+    def save_provider(self, provider: Provider, by: str) -> Provider:
+        """Insert or edit a provider; each changed field is logged as a setting
+        change ``provider.<name>.<field>``. Returns it with its new version."""
+        fields = ("label", "base_url", "kind", "app_path", "api_format", "enabled")
+        columns = tuple(c.strip() for c in self._PROVIDER_COLUMNS.split(","))
+
+        def body() -> Provider:
+            row = self._run(
+                f"SELECT {self._PROVIDER_COLUMNS} FROM providers WHERE name = ?", (provider.name,)
+            )
+            previous = self._provider(row[0]) if row else None
+            changed = [
+                name
+                for name in fields
+                if previous is None
+                or _text(getattr(previous, name)) != _text(getattr(provider, name))
+            ]
+            if previous is not None and not changed:
+                return previous
+            version = 1 if previous is None else previous.version + 1
+            built_in = provider.built_in if previous is None else previous.built_in
+            saved = Provider(
+                provider.name,
+                provider.base_url,
+                provider.kind,
+                provider.label,
+                provider.app_path,
+                provider.api_format,
+                provider.enabled,
+                built_in,
+                version,
+            )
+            self._run(
+                self._upsert("providers", columns, ("name",)),
+                (
+                    saved.name,
+                    saved.base_url,
+                    saved.kind.value,
+                    saved.label,
+                    saved.app_path,
+                    saved.api_format,
+                    int(saved.enabled),
+                    int(saved.built_in),
+                    saved.version,
+                ),
+            )
+            now = to_epoch_ms(utc_now())
+            for name in changed:
+                old = None if previous is None else _text(getattr(previous, name))
+                self._log_setting(
+                    now, by, f"provider.{saved.name}.{name}", old, _text(getattr(saved, name))
+                )
+            return saved
 
         return self._write(body)
 

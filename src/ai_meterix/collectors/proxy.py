@@ -182,13 +182,18 @@ def call_type_of(method: str, path: str) -> CallType | None:
 
 
 def provider_of(route: Route) -> str:
+    """The provider a call is recorded under: the route's name (each provider is
+    a route, record 0018); for the default route, "local" or a known host."""
+    if route.name != "default":
+        return route.name
     host = urlsplit(route.upstream).hostname or ""
     if is_loopback(host):
-        return "local" if route.name == "default" else route.name
-    for name in ("openai", "anthropic", "googleapis", "openrouter", "groq", "mistral", "together"):
+        return "local"
+    known = ("openai", "anthropic", "openrouter", "groq", "mistral", "together", "fireworks")
+    for name in (*known, "deepseek", "x.ai", "googleapis"):
         if name in host:
-            return "google" if name == "googleapis" else name
-    return route.name if route.name != "default" else host
+            return {"googleapis": "gemini", "x.ai": "xai"}.get(name, name)
+    return host
 
 
 def request_model(body: bytes | None, path: str) -> str | None:
@@ -237,6 +242,7 @@ class Recorder:
         self._callers: dict[str, Caller] = {}
         self._saved_callers: set[str] = set()
         self._priced_models: set[str] = set()
+        self.local_providers: set[str] = {"local"}  # providers that run on this machine
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self.written = 0
@@ -308,9 +314,10 @@ class Recorder:
                 ensure_price_row(
                     self._storage,
                     call.model,
-                    local=call.provider == "local",
+                    local=call.provider in self.local_providers,
                     ts=call.ts,
                     by="proxy",
+                    provider=call.provider,
                 )
             except Exception as exc:  # the calls are saved; the row is retried next time
                 log.warning("cannot add a price row for %s: %s", call.model, exc)

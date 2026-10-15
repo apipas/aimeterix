@@ -23,7 +23,7 @@ from ai_meterix.interfaces.auth import (
     verify_password,
 )
 from ai_meterix.pricing.engine import CostEngine
-from ai_meterix.storage import open_reader
+from ai_meterix.storage import open_reader, open_writer
 
 UTC = timezone.utc
 
@@ -216,6 +216,31 @@ def test_settings_are_read_by_all_and_changed_by_the_admin(api: ApiServer) -> No
     assert user.call("GET", "/api/config/history?key=nope")[0] == 404
     status, body = admin.call("PUT", "/api/config/agent.interval_s", {"reset": True})
     assert status == 200 and body["value"] == 10.0
+
+
+def test_providers_are_read_by_all_and_changed_by_the_admin(api: ApiServer) -> None:
+    from ai_meterix.pricing.providers import seed_providers
+
+    with open_writer(api.storage_url) as storage:
+        seed_providers(storage)
+    user, admin = ready(api, "user"), ready(api, "admin")
+    status, body = user.call("GET", "/api/providers")
+    groq = next(p for p in body["providers"] if p["name"] == "groq")
+    assert status == 200 and groq["kind"] == "cloud" and groq["app_url"].endswith("/groq/openai/v1")
+    assert user.call("PUT", "/api/providers/groq", {"enabled": False})[0] == 403
+    status, body = admin.call("PUT", "/api/providers/groq", {"enabled": False})
+    assert status == 200 and body["provider"]["enabled"] is False
+    new = {"base_url": "http://127.0.0.1:8081", "app_path": "/v1", "label": "llama.cpp"}
+    status, body = admin.call("PUT", "/api/providers/llama", new)
+    assert status == 200 and body["provider"]["kind"] == "local"
+    assert admin.call("PUT", "/api/providers/bad", {"label": "no url"})[0] == 400
+    assert admin.call("PUT", "/api/prices/m1", {"input": 1, "provider": "nope"})[0] == 400
+    status, body = admin.call("PUT", "/api/prices/m1", {"input": 1, "provider": "llama"})
+    assert status == 200 and body["price"]["provider"] == "llama"
+    status, body = user.call("GET", "/api/providers/history?name=groq")
+    assert [c["key"] for c in body["changes"]][-1] == "provider.groq.enabled"
+    status, body = user.call("GET", "/api/dashboard")
+    assert status == 200 and {"groq", "llama"} <= {p["name"] for p in body["providers"]}
 
 
 def raw(server: ApiServer, method: str, path: str, body: Any = None, headers: Any = None) -> Any:
