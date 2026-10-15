@@ -235,8 +235,9 @@ def test_the_dashboard_page_is_self_contained(api: ApiServer) -> None:
     assert "default-src 'none'" in policy and "frame-ancestors 'none'" in policy
     nonce = policy.split("'nonce-")[1].split("'")[0]
     assert page.count(f'nonce="{nonce}"') == 2 and "{{nonce}}" not in page
-    assert "http://" not in page.replace("http://www.w3.org/2000/svg", "")
-    assert "https://" not in page  # no external requests
+    # no external requests: nothing loads from a URL (the help may mention URLs as text)
+    assert not re.search(r"""(src|href|action)\s*=\s*["']?(https?:)?//""", page)
+    assert "url(" not in page and "@import" not in page
     assert raw(api, "GET", "/")[0].getheader("Content-Security-Policy") != policy  # fresh nonce
 
 
@@ -245,6 +246,25 @@ def test_every_help_link_has_a_topic(api: ApiServer) -> None:
     links = set(re.findall(r'href="#(h-[a-z]+)"', page))
     topics = set(re.findall(r'id="(h-[a-z]+)"', page))
     assert links and links <= topics and topics <= links  # no dead link, no unlisted topic
+
+
+def test_the_help_lists_every_command_and_option(api: ApiServer) -> None:
+    import argparse
+
+    from ai_meterix.interfaces.cli import build_parser
+
+    page = raw(api, "GET", "/")[1].decode()
+    reference = page[page.index('id="h-commands"') :]
+    (commands,) = [a for a in build_parser()._actions if isinstance(a, argparse._SubParsersAction)]
+    for name, parser in commands.choices.items():
+        assert f'id="c-{name}"' in reference, f"no help for aimeterix {name}"
+        block = reference[reference.index(f'id="c-{name}"') :].split('class="cmd"')[0]
+        for action in parser._actions:
+            for option in action.option_strings:
+                if option.startswith("--") and option != "--help":
+                    assert option in block, f"aimeterix {name} {option} is not in the help"
+            for choice in action.choices or () if not action.option_strings else ():
+                assert choice in block, f"aimeterix {name} {choice} is not in the help"
 
 
 def test_the_browser_logs_in_with_a_cookie(api: ApiServer) -> None:
