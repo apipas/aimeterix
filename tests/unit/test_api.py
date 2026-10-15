@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import http.client
 import json
+import re
 import threading
 from collections.abc import Iterator
 from datetime import datetime, timezone
@@ -237,6 +238,13 @@ def test_the_dashboard_page_is_self_contained(api: ApiServer) -> None:
     assert "http://" not in page.replace("http://www.w3.org/2000/svg", "")
     assert "https://" not in page  # no external requests
     assert raw(api, "GET", "/")[0].getheader("Content-Security-Policy") != policy  # fresh nonce
+
+
+def test_every_help_link_has_a_topic(api: ApiServer) -> None:
+    page = raw(api, "GET", "/")[1].decode()
+    links = set(re.findall(r'href="#(h-[a-z]+)"', page))
+    topics = set(re.findall(r'id="(h-[a-z]+)"', page))
+    assert links and links <= topics and topics <= links  # no dead link, no unlisted topic
 
 
 def test_the_browser_logs_in_with_a_cookie(api: ApiServer) -> None:

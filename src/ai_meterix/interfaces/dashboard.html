@@ -90,6 +90,26 @@ tr.total td { font-weight: 650; border-top: 1px solid var(--axis); }
 details summary { cursor: pointer; color: var(--ink-2); margin-top: 8px; }
 .section { margin-bottom: 12px; }
 .loading { opacity: 0.55; transition: opacity .15s; }
+.q { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px;
+  margin-left: 6px; border-radius: 50%; border: 1px solid var(--axis); color: var(--ink-2); font-size: 11px;
+  font-weight: 650; text-decoration: none; vertical-align: 1px; }
+.q:hover, .q:focus-visible { border-color: var(--accent); color: var(--accent); }
+.hint { color: var(--muted); font-size: 12px; margin: -8px 0 12px; }
+#help { max-width: 860px; margin: 0 auto; line-height: 1.6; }
+#help h2 { font-size: 20px; margin-bottom: 4px; }
+#help h3 { font-size: 15px; margin: 28px 0 6px; padding-top: 16px; border-top: 1px solid var(--grid); }
+#help .toc { columns: 2 220px; padding-left: 18px; margin: 12px 0 0; }
+#help a { color: var(--accent); }
+#help dl { margin: 8px 0; }
+#help dt { font-weight: 600; margin-top: 8px; }
+#help dd { margin: 0 0 0 16px; color: var(--ink-2); }
+#help pre { background: var(--page); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px;
+  overflow-x: auto; font-size: 12.5px; line-height: 1.55; }
+#help td, #help th { white-space: normal; text-align: left; vertical-align: top; }
+code { font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--page);
+  border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
+pre code { background: none; border: 0; padding: 0; }
+.helpbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 [hidden] { display: none !important; }
 </style>
 </head>
@@ -97,6 +117,7 @@ details summary { cursor: pointer; color: var(--ink-2); margin-top: 8px; }
 <header>
   <h1>AI Meterix</h1>
   <span class="who" id="who"></span>
+  <button id="help-btn" aria-controls="help">Help</button>
   <button id="logout" hidden>Log out</button>
 </header>
 <main>
@@ -136,51 +157,201 @@ details summary { cursor: pointer; color: var(--ink-2); margin-top: 8px; }
 
     <div id="content">
       <div class="tiles">
-        <div class="card tile"><div class="label">Cost</div><div class="value" id="t-cost">-</div><div class="sub" id="t-cost-sub"></div></div>
-        <div class="card tile"><div class="label">Energy</div><div class="value" id="t-energy">-</div><div class="sub" id="t-energy-sub"></div></div>
-        <div class="card tile"><div class="label">Tokens</div><div class="value" id="t-tokens">-</div><div class="sub" id="t-tokens-sub"></div></div>
-        <div class="card tile"><div class="label">LLM calls</div><div class="value" id="t-calls">-</div><div class="sub" id="t-calls-sub"></div></div>
+        <div class="card tile"><div class="label">Cost<a class="q" href="#h-numbers" data-help="h-numbers" aria-label="Help: cost">?</a></div><div class="value" id="t-cost">-</div><div class="sub" id="t-cost-sub"></div></div>
+        <div class="card tile"><div class="label">Energy<a class="q" href="#h-numbers" data-help="h-numbers" aria-label="Help: energy">?</a></div><div class="value" id="t-energy">-</div><div class="sub" id="t-energy-sub"></div></div>
+        <div class="card tile"><div class="label">Tokens<a class="q" href="#h-numbers" data-help="h-numbers" aria-label="Help: tokens">?</a></div><div class="value" id="t-tokens">-</div><div class="sub" id="t-tokens-sub"></div></div>
+        <div class="card tile"><div class="label">LLM calls<a class="q" href="#h-numbers" data-help="h-numbers" aria-label="Help: LLM calls">?</a></div><div class="value" id="t-calls">-</div><div class="sub" id="t-calls-sub"></div></div>
       </div>
 
       <div class="grid2">
         <div class="card">
-          <h2>Energy per day (Wh)</h2>
+          <h2>Energy per day (Wh)<a class="q" href="#h-chart" data-help="h-chart" aria-label="Help: energy chart">?</a></h2>
+          <p class="hint">Chip energy measured each day, split by who used it. Hover a bar for details.</p>
           <div class="legend" id="legend"></div>
           <div class="chart" id="chart"><div class="tip" id="tip"></div></div>
           <details><summary>Show as a table</summary><div class="scroll" id="chart-table"></div></details>
         </div>
         <div class="card">
-          <h2>Is it measuring?</h2>
+          <h2>Is it measuring?<a class="q" href="#h-health" data-help="h-health" aria-label="Help: health">?</a></h2>
           <div id="health"></div>
         </div>
       </div>
 
       <div class="card section">
-        <h2>Usage per model</h2>
+        <h2>Usage per model<a class="q" href="#h-models" data-help="h-models" aria-label="Help: usage per model">?</a></h2>
+        <p class="hint">Every model seen in this range: calls and tokens from the proxy, energy from the agent.</p>
         <div class="scroll" id="models"></div>
         <div class="muted" id="model-notes"></div>
       </div>
 
       <div class="grid2">
         <div class="card">
-          <h2>Data coverage</h2>
+          <h2>Data coverage<a class="q" href="#h-coverage" data-help="h-coverage" aria-label="Help: data coverage">?</a></h2>
           <p class="muted" id="cov-sum"></p>
           <div id="coverage"></div>
         </div>
         <div class="card">
-          <h2>Data issues</h2>
+          <h2>Data issues<a class="q" href="#h-issues" data-help="h-issues" aria-label="Help: data issues">?</a></h2>
           <ul class="plain" id="issues"></ul>
         </div>
       </div>
 
       <div class="card section">
-        <h2>Prices, profile and settings</h2>
+        <h2>Prices, profile and settings<a class="q" href="#h-settings" data-help="h-settings" aria-label="Help: prices, profile and settings">?</a></h2>
         <p class="muted">Read-only here. Change them with <code>aimeterix prices</code>, <code>aimeterix profile</code> and <code>aimeterix config</code>, or the admin API.</p>
         <details><summary>Prices per 1M tokens</summary><div class="scroll" id="prices"></div></details>
         <details><summary>Cost profile</summary><div class="scroll" id="profile"></div></details>
         <details><summary>Live settings</summary><div class="scroll" id="settings"></div></details>
       </div>
     </div>
+  </section>
+  <section id="help" class="card" hidden aria-labelledby="help-title">
+    <div class="helpbar">
+      <h2 id="help-title" tabindex="-1">Help</h2>
+      <button id="help-close">Back</button>
+    </div>
+    <p class="muted">AI Meterix measures what AI work costs on this machine: the energy the chip uses, the tokens each model reads and writes, and what both cost in USD. This page explains every number on the dashboard and how to run the service.</p>
+    <ul class="toc">
+      <li><a href="#h-start">Getting started</a></li>
+      <li><a href="#h-parts">How it works</a></li>
+      <li><a href="#h-login">Accounts and sign-in</a></li>
+      <li><a href="#h-range">Choosing dates</a></li>
+      <li><a href="#h-numbers">The four numbers</a></li>
+      <li><a href="#h-chart">Energy per day</a></li>
+      <li><a href="#h-health">Is it measuring?</a></li>
+      <li><a href="#h-models">Usage per model</a></li>
+      <li><a href="#h-coverage">Data coverage</a></li>
+      <li><a href="#h-issues">Data issues</a></li>
+      <li><a href="#h-cost">How cost is calculated</a></li>
+      <li><a href="#h-settings">Prices, profile and settings</a></li>
+      <li><a href="#h-privacy">Privacy and security</a></li>
+      <li><a href="#h-trouble">Troubleshooting</a></li>
+      <li><a href="#h-commands">Command reference</a></li>
+    </ul>
+
+    <h3 id="h-start">Getting started</h3>
+    <p>Run these in a terminal, in the project folder (with <code>uv run</code> in front if you use uv):</p>
+<pre><code>aimeterix start      # start the agent, proxy and API in the background
+aimeterix health     # check everything runs and measures (exit code 0 = healthy)
+aimeterix stop       # stop all three; data in memory is written first</code></pre>
+    <p>Then open this page at <code>127.0.0.1:8788</code> in your browser. Point your AI apps at the proxy (port <code>8787</code> on this machine by default; change the port with <code>AIMETERIX_PROXY_PORT</code>) instead of calling the model server directly, so their calls are counted. Logs are in <code>~/.aimeterix/logs</code>. The services keep running after you close the terminal, but not after a restart of the machine: run <code>aimeterix start</code> again.</p>
+
+    <h3 id="h-parts">How it works</h3>
+    <dl>
+      <dt>agent</dt><dd>Samples the chip every few seconds: power, energy, CPU, GPU and memory, and which processes use them. This is where every energy figure comes from.</dd>
+      <dt>proxy</dt><dd>Sits between your apps and the model server (local llama.cpp or a cloud API). It forwards each call unchanged and records the model and the token counts. It never stores prompts, answers or API keys.</dd>
+      <dt>serve</dt><dd>The API and this dashboard. It only reads and computes; it changes nothing unless an admin asks it to.</dd>
+    </dl>
+    <p>The three run as separate processes on purpose: if one stops, the proxy keeps forwarding, so your apps keep working. <code>aimeterix stop --keep-proxy</code> stops the other two and leaves the proxy running.</p>
+
+    <h3 id="h-login">Accounts and sign-in</h3>
+    <p>There are two accounts. <strong>user</strong> can see everything. <strong>admin</strong> can also change prices, the cost profile and settings through the API or the command line. On first sign-in the password is the account name and you must choose a new one. To reset a forgotten password, run <code>aimeterix password user</code> (or <code>admin</code>) on this machine.</p>
+    <p>Signing in keeps you logged in with a secure cookie for this browser only. Use <strong>Log out</strong> on a shared computer. This dashboard is read-only: changes are made with the commands in <a href="#h-commands">Command reference</a>.</p>
+
+    <h3 id="h-range">Choosing dates</h3>
+    <p>Pick <strong>Today</strong>, the last 7, 30 or 90 days, or enter your own dates and press <strong>Show</strong> (up to 366 days). Days are local days on this machine, midnight to midnight. Every panel uses the same range.</p>
+
+    <h3 id="h-numbers">The four numbers</h3>
+    <dl>
+      <dt>Cost</dt><dd>Everything this range cost: energy, the share of fixed fees, and tokens sent to paid models. The small line splits it into energy and tokens. Local models have no token price, so their cost is their energy.</dd>
+      <dt>Energy</dt><dd>The energy the chip used, measured by the agent, in watt-hours (Wh). 1,000 Wh is 1 kWh, the unit on your electricity bill.</dd>
+      <dt>Tokens</dt><dd>All tokens read and written by every model through the proxy: input, output and cached tokens together. The small line shows input and output.</dd>
+      <dt>LLM calls</dt><dd>How many requests went through the proxy. Calls that skip the proxy are not counted.</dd>
+    </dl>
+
+    <h3 id="h-chart">Energy per day</h3>
+    <p>Each bar is one day. Its height is the energy the chip used; the colors show who used it:</p>
+    <dl>
+      <dt>A model name</dt><dd>Energy used by the processes that run that local model.</dd>
+      <dt>(other apps)</dt><dd>Energy used by everything else on the machine: browser, editor, and so on.</dd>
+      <dt>(idle overhead)</dt><dd>Energy nobody used, such as the chip waiting at idle. Fixed fees for hours the machine was off also land here.</dd>
+      <dt>other models</dt><dd>When more than six models ran, the smaller ones are grouped under this name.</dd>
+    </dl>
+    <p>Hover or tab to a bar to see each part in Wh. <strong>Show as a table</strong> gives the same numbers as text.</p>
+
+    <h3 id="h-health">Is it measuring?</h3>
+    <p><strong>Healthy</strong> means all three processes run, the database answers, and the newest hardware sample is less than 5 minutes old. Otherwise the panel says <strong>Needs attention</strong> and lists what is wrong.</p>
+    <dl>
+      <dt>agent, proxy, serve</dt><dd>Running or stopped, with how long each has run. Processes started some other way than <code>aimeterix start</code> show as stopped here, even when they work.</dd>
+      <dt>database</dt><dd>Whether it answers, and its size on disk.</dd>
+      <dt>last hardware sample / last proxied call</dt><dd>How long ago the newest data arrived. No calls for a while is normal when nobody uses AI; no samples is not.</dd>
+    </dl>
+
+    <h3 id="h-models">Usage per model</h3>
+    <dl>
+      <dt>Source</dt><dd>Where the model runs: a cloud provider, or local for a model on this machine.</dd>
+      <dt>Calls, Input, Output</dt><dd>Requests, and tokens sent to and generated by the model.</dd>
+      <dt>Cache read, Cache write</dt><dd>Tokens served from or saved to the provider's prompt cache. These are usually cheaper than normal input.</dd>
+      <dt>Wh</dt><dd>Energy used on this machine. For a cloud model this is near zero, because the work happens in the provider's data center.</dd>
+      <dt>Cost</dt><dd>Tokens times the model's price, plus its share of energy and fees.</dd>
+    </dl>
+    <p>A <strong>-</strong> means the provider does not report that count, which is not the same as 0. A <strong>*</strong> after a name points to a note under <a href="#h-issues">Data issues</a>.</p>
+
+    <h3 id="h-coverage">Data coverage</h3>
+    <p>For each day, how many hours the agent was actually measuring. A full bar is 24 hours (23 or 25 on daylight-saving days; today counts only the hours so far). Hours when the agent was not running are missing, not zero, so a short bar means the real energy and cost were higher than shown.</p>
+
+    <h3 id="h-issues">Data issues</h3>
+    <dl>
+      <dt>A paid model has no price yet</dt><dd>Its tokens count as $0 until an admin sets the price: <code>aimeterix prices set MODEL --input 3 --output 15</code>, or load the built-in list with <code>aimeterix prices apply-reference</code>.</dd>
+      <dt>No cost profile</dt><dd>Energy is measured but not priced. Set your electricity rate: <code>aimeterix profile set --rate 0.30</code>.</dd>
+      <dt>Energy share is an estimate</dt><dd>The chip reports total energy; the split between models and apps is estimated from how much each process used. Totals are measured, the split is an estimate.</dd>
+      <dt>Batch tokens not metered yet</dt><dd>Batch jobs are seen, but their tokens are not counted yet.</dd>
+      <dt>Days with less than 90% measured</dt><dd>See <a href="#h-coverage">Data coverage</a>.</dd>
+    </dl>
+
+    <h3 id="h-cost">How cost is calculated</h3>
+    <p>Costs are never stored: they are computed from the measurements each time you look. For every hour:</p>
+<pre><code>energy cost = kWh measured × PUE × rate per kWh
+fee cost    = fixed fees per month ÷ hours in that month
+token cost  = tokens ÷ 1,000,000 × price per 1M tokens (per token type)</code></pre>
+    <p>Energy and fees are then split between models, other apps and idle overhead by how much energy each used that hour. Each hour uses the price and profile in force at that time. <code>aimeterix prices set</code> corrects the current price everywhere it applies; add <code>--from DAY</code> to start a new price on that day and keep the old one before it. A new profile version applies from when it is saved.</p>
+
+    <h3 id="h-settings">Prices, profile and settings</h3>
+    <dl>
+      <dt>Prices per 1M tokens</dt><dd>What each model charges per million tokens, by token type, in USD. "not yet" means no price is set and its tokens show as $0.</dd>
+      <dt>Cost profile</dt><dd>Your electricity rate per kWh, the PUE (cooling and building overhead; 1.0 at home, 1.2 to 1.6 in a data center), and fixed running fees per month. Each change is saved as a new version.</dd>
+      <dt>Live settings</dt><dd>Settings the running services re-read about once a minute, without a restart:</dd>
+    </dl>
+    <div class="scroll"><table>
+      <tr><th>Setting</th><th>What it does</th></tr>
+      <tr><td><code>agent.interval_s</code></td><td>Seconds between hardware samples (default 10).</td></tr>
+      <tr><td><code>storage.raw_retention_days</code></td><td>Days to keep raw samples before only hourly totals remain (default 30).</td></tr>
+      <tr><td><code>storage.rollup_retention_days</code></td><td>Days to keep hourly totals (default 365).</td></tr>
+      <tr><td><code>proxy.default_upstream</code></td><td>Where the proxy sends calls that match no named route, for example your local model server.</td></tr>
+      <tr><td><code>proxy.upstreams</code></td><td>Named routes, such as <code>/openai/…</code> to the OpenAI API.</td></tr>
+      <tr><td><code>proxy.allowed_key_hashes</code></td><td>If set, only these API keys (stored as SHA-256 hashes, never the key itself) may use the proxy.</td></tr>
+    </table></div>
+    <p>Change them with <code>aimeterix config set KEY VALUE</code>; every change is logged with who and when (<code>aimeterix config history KEY</code>).</p>
+
+    <h3 id="h-privacy">Privacy and security</h3>
+    <ul>
+      <li>Only counts are stored: model names, token numbers, energy. Never prompts, answers or API keys.</li>
+      <li>The proxy, API and dashboard listen on this machine only (127.0.0.1) by default.</li>
+      <li>This page loads nothing from the internet: no fonts, scripts or trackers.</li>
+      <li>Passwords are stored as salted hashes. Sessions end on <strong>Log out</strong>.</li>
+    </ul>
+
+    <h3 id="h-trouble">Troubleshooting</h3>
+    <dl>
+      <dt>The page does not open</dt><dd>Run <code>aimeterix health</code>. If serve is stopped, run <code>aimeterix start</code> and check <code>~/.aimeterix/logs/serve.log</code>.</dd>
+      <dt>Calls or tokens stay at 0</dt><dd>Your app is calling the model server directly. Point it at the proxy port, and check <code>proxy.default_upstream</code> points at the model server (<code>aimeterix config</code>).</dd>
+      <dt>Energy stays at 0 or coverage is low</dt><dd>The agent is not running or cannot read the sensors. Run <code>aimeterix doctor</code> to see what this machine can measure, then check <code>~/.aimeterix/logs/agent.log</code>.</dd>
+      <dt>Cost is $0</dt><dd>Set a cost profile and model prices; see <a href="#h-issues">Data issues</a>.</dd>
+      <dt>"Port in use" at start</dt><dd>Another program, or an old copy started by hand, already uses the port. Stop it, or run <code>aimeterix stop</code> first.</dd>
+    </dl>
+
+    <h3 id="h-commands">Command reference</h3>
+<pre><code>aimeterix start | stop | health       run, stop and check the services
+aimeterix doctor                      what this machine can measure
+aimeterix usage --from 2026-10-01     usage and cost per model and day
+aimeterix usage --by model --csv out.csv
+aimeterix profile show | set --rate 0.30 --pue 1.0 --fees 0
+aimeterix prices list | set MODEL --input 3 --output 15
+aimeterix prices reference | apply-reference
+aimeterix config | set KEY VALUE | reset KEY | history KEY
+aimeterix password user | admin       set a password
+aimeterix COMMAND --help              all options of a command</code></pre>
+    <p><button id="help-close-2">Back to the dashboard</button></p>
   </section>
 </main>
 <script nonce="{{nonce}}">
@@ -201,10 +372,39 @@ async function api(method, path, body) {
   return { status: res.status, data };
 }
 
+let current = "login";
 function show(view) {
+  current = view;
   for (const id of ["login", "change", "dash"]) $(id).hidden = id !== view;
+  $("help").hidden = true;
   $("logout").hidden = view === "login";
 }
+
+// help: a page of its own; "?" links open it at their topic
+function openHelp(topic) {
+  for (const id of ["login", "change", "dash"]) $(id).hidden = true;
+  $("help").hidden = false;
+  $("help-btn").classList.add("on");
+  const target = topic ? document.getElementById(topic) : null;
+  if (target) { target.scrollIntoView(); } else { window.scrollTo(0, 0); $("help-title").focus(); }
+}
+function closeHelp() {
+  $("help").hidden = true;
+  $("help-btn").classList.remove("on");
+  $(current).hidden = false;
+  if (current === "dash" && lastData) renderChart(lastData);
+  window.scrollTo(0, 0);
+}
+$("help-btn").addEventListener("click", () => ($("help").hidden ? openHelp() : closeHelp()));
+$("help-close").addEventListener("click", closeHelp);
+$("help-close-2").addEventListener("click", closeHelp);
+document.addEventListener("click", (e) => {
+  const a = e.target.closest("a[href^='#h-']");
+  if (!a) return;
+  e.preventDefault();
+  openHelp(a.getAttribute("href").slice(1));
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("help").hidden) closeHelp(); });
 
 function el(tag, text, cls) {
   const e = document.createElement(tag);
