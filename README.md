@@ -4,7 +4,7 @@
 
 AI Meterix is an open-source tool for teams running AI on their own GPUs, rented cloud GPUs and LLM APIs. It meters usage, prices it with *your* rates, tells you in plain language what to change, and forecasts next month with a range. Store the data in whatever you already use: SQLite, DuckDB, PostgreSQL, or your own connector.
 
-> **Status: early development.** Phases 1 and 2 are in progress: the data model, storage connectors (SQLite default, PostgreSQL, DuckDB), `aimeterix doctor`, the Apple Silicon agent, the LLM proxy and the cost engine (`usage`, `profile`, `prices`) the localhost API (`serve`) and live settings (`config`) exist. Reports and the dashboard come next. Read the plan in [docs/PLAN.md](docs/PLAN.md).
+> **Status: early development.** Phases 1 and 2 are in progress: the data model, storage connectors (SQLite default, PostgreSQL, DuckDB), `aimeterix doctor`, the Apple Silicon agent, the LLM proxy and the cost engine (`usage`, `profile`, `prices`) the localhost API (`serve`) and live settings (`config`), `start` / `stop` / `health` and a read-only web dashboard exist. The advisor and forecast come next. Read the plan in [docs/PLAN.md](docs/PLAN.md).
 
 ## Try it
 
@@ -24,6 +24,8 @@ aimeterix stop                   # stop them; buffers are written first (--keep-
 ```
 
 The first start of the agent, proxy or API copies the live settings (sampling interval, retention, proxy routes and key allowlist) from `aimeterix.yaml` into the database. From then on the database wins: change them with `aimeterix config set KEY VALUE` or `PUT /api/config/<key>`, and the agent and proxy pick the change up within a minute, without a restart. `aimeterix config history` shows who changed what; `aimeterix config export FILE` writes the settings back to YAML. The database URL, addresses and ports, and secrets stay in the file or environment.
+
+After `aimeterix start`, open the dashboard at http://127.0.0.1:8788/ (cost, energy, tokens and calls per day and per model, data coverage, health). It is read-only; change settings with `aimeterix config` or the API.
 
 `aimeterix serve` creates two accounts, `user` (read) and `admin` (read and write), whose first password is their name and must be changed at first login (`POST /api/password`, or `aimeterix password admin`). Log in with `POST /api/login`, then send `Authorization: Bearer <token>`. Endpoints are listed in `src/ai_meterix/interfaces/api.py`.
 
