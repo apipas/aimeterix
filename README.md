@@ -21,7 +21,7 @@ Until the package is on PyPI: `pip install git+https://github.com/mabuthraa/goco
 ## Quick start
 
 ```bash
-aimeterix init       # writes aimeterix.yaml in this folder; check it
+aimeterix init       # writes the config file and says where; check it
 aimeterix init       # shows what it will set up, asks, creates the database
 aimeterix start      # runs the agent, proxy and dashboard in the background
 aimeterix health     # is everything measuring? (exit code 0 when healthy)
@@ -34,7 +34,7 @@ Then:
 3. Point your apps at the proxy instead of the provider. `aimeterix providers` shows the address for each one, for example `http://127.0.0.1:8787/openai/v1`. Your app keeps its own API key; it passes through and is never stored.
 4. Load public token prices: `aimeterix prices apply-reference --dry-run`, then without `--dry-run`.
 
-`aimeterix stop` stops everything. `aimeterix uninstall --purge` also deletes the data in `~/.aimeterix`. The dashboard has a **Help** page that explains every number and lists every command with its options.
+`aimeterix stop` stops everything. `aimeterix uninstall --purge` also deletes the config and data, and `aimeterix paths` shows where they are. The dashboard has a **Help** page that explains every number and lists every command with its options.
 
 ## What it measures
 
@@ -58,13 +58,21 @@ Three small processes run on your machine, all started by `aimeterix start`:
 
 They are separate on purpose: if one stops, the proxy keeps forwarding, so your apps keep working. Each can also run on its own in a terminal (`aimeterix agent`, `aimeterix proxy`, `aimeterix serve`).
 
-Data goes to SQLite by default (`~/.aimeterix/meter.db`); PostgreSQL and DuckDB work too. Settings live in the database after `init`; change them with `aimeterix config`, `aimeterix providers` and `aimeterix prices`, or the admin API.
+Every command finds the same files, whatever folder you run it in:
+
+| | macOS | Linux |
+|---|---|---|
+| Config (`aimeterix.yaml`, `.env`) | `~/Library/Application Support/aimeterix` | `~/.config/aimeterix` |
+| Database (`meter.db`), buffers | `~/Library/Application Support/aimeterix` | `~/.local/share/aimeterix` |
+| Logs | `~/Library/Logs/aimeterix` | `~/.local/state/aimeterix/logs` |
+
+Set `AIMETERIX_HOME` to keep everything in one folder instead. Data goes to SQLite by default; PostgreSQL and DuckDB work too. Settings live in the database after `init`; change them with `aimeterix config`, `aimeterix providers` and `aimeterix prices`, or the admin API.
 
 ## Privacy and security
 
 - Only counts are stored: model names, token numbers, timings, energy. Never prompts, answers or API keys.
 - The proxy, API and dashboard listen on this machine only (127.0.0.1). The only outbound connections are your own calls, forwarded to the provider you chose. No account, no telemetry, no update check.
-- No admin rights: nothing runs as root, and nothing is installed outside `~/.aimeterix` and the Python package.
+- No admin rights: nothing runs as root, and nothing is written outside the folders above and the Python package.
 - Two accounts guard the API and dashboard: `user` reads, `admin` can also change settings. Passwords are salted scrypt hashes.
 
 To report a security problem, see [SECURITY.md](SECURITY.md). More answers in [docs/FAQ.md](docs/FAQ.md).

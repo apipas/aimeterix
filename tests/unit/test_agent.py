@@ -20,6 +20,7 @@ from ai_meterix.collectors.agent import (
 )
 from ai_meterix.collectors.mock import MODEL_NAME, MockBackend
 from ai_meterix.core.model import Source
+from ai_meterix.core.paths import paths
 from ai_meterix.interfaces.cli import duration, main
 from ai_meterix.storage import Dataset, StorageWriter, UsageQuery, open_writer
 
@@ -245,4 +246,4 @@ def test_agent_command_runs_the_mock_backend(
     monkeypatch.chdir(tmp_path)
     assert main(["agent", "--mock", "--for", "0", "--interval", "5"]) == 0
     assert "agent stopped" in capsys.readouterr().out
-    assert (tmp_path / ".aimeterix" / "agent-status.json").exists()
+    assert (paths().data_dir / "agent-status.json").exists()

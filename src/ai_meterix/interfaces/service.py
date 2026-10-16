@@ -2,7 +2,7 @@
 
 One command runs the agent, the proxy and the API in the background, each as
 its own process, so a crash in one never stops the proxy that apps depend on.
-PID files go to ``~/.aimeterix/run`` and logs to ``~/.aimeterix/logs``. They
+PID files go to the run folder and logs to the logs folder (``core/paths.py``). They
 keep running after the terminal closes, not after a reboot (auto-start is MVP-2).
 """
 
@@ -21,24 +21,24 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from ai_meterix.core.paths import Paths, paths
 from ai_meterix.storage.base import Dataset, StorageReader, UsageQuery
 
 SERVICES = ("agent", "proxy", "serve")
-HOME = Path("~/.aimeterix")
 STOP_WAIT_S = 10.0
 SAMPLE_STALE = timedelta(minutes=5)
 
 
-def run_dir(home: Path = HOME) -> Path:
-    return home.expanduser() / "run"
+def run_dir(where: Paths | None = None) -> Path:
+    return (where or paths()).run_dir
 
 
-def log_dir(home: Path = HOME) -> Path:
-    return home.expanduser() / "logs"
+def log_dir(where: Paths | None = None) -> Path:
+    return (where or paths()).log_dir
 
 
-def _pid_file(name: str, home: Path) -> Path:
-    return run_dir(home) / f"{name}.pid"
+def _pid_file(name: str, where: Paths | None) -> Path:
+    return run_dir(where) / f"{name}.pid"
 
 
 def _alive(pid: int) -> bool:
@@ -72,8 +72,8 @@ class Process:
         return None if self.since is None else datetime.now(timezone.utc) - self.since
 
 
-def status(name: str, home: Path = HOME) -> Process:
-    path = _pid_file(name, home)
+def status(name: str, where: Paths | None = None) -> Process:
+    path = _pid_file(name, where)
     try:
         pid = int(path.read_text().strip())
         since = datetime.fromtimestamp(path.stat().st_mtime, timezone.utc)
@@ -87,20 +87,20 @@ def start(
     names: Sequence[str],
     *,
     config: str | None = None,
-    home: Path = HOME,
+    where: Paths | None = None,
     python: str = sys.executable,
     settle_s: float = 1.5,
 ) -> list[tuple[str, bool, str]]:
     """Start each service in the background; returns (name, ok, message)."""
-    run_dir(home).mkdir(parents=True, exist_ok=True)
-    log_dir(home).mkdir(parents=True, exist_ok=True)
+    run_dir(where).mkdir(parents=True, exist_ok=True)
+    log_dir(where).mkdir(parents=True, exist_ok=True)
     results = []
     for name in names:
-        current = status(name, home)
+        current = status(name, where)
         if current.running:
             results.append((name, True, f"already running (pid {current.pid})"))
             continue
-        log_path = log_dir(home) / f"{name}.log"
+        log_path = log_dir(where) / f"{name}.log"
         command = [python, "-m", "ai_meterix.interfaces.cli", name]
         if config:
             command += ["--config", str(Path(config).expanduser().resolve())]
@@ -114,12 +114,12 @@ def start(
                 stderr=subprocess.STDOUT,
                 start_new_session=True,  # keeps running after the terminal closes
             )
-        _pid_file(name, home).write_text(f"{child.pid}\n")
+        _pid_file(name, where).write_text(f"{child.pid}\n")
         deadline = time.monotonic() + settle_s
         while time.monotonic() < deadline and child.poll() is None:
             time.sleep(0.1)
         if child.poll() is not None:
-            _pid_file(name, home).unlink(missing_ok=True)
+            _pid_file(name, where).unlink(missing_ok=True)
             results.append((name, False, f"exited at start; see {log_path}:\n{_tail(log_path)}"))
         else:
             results.append((name, True, f"started (pid {child.pid}, log {log_path})"))
@@ -127,15 +127,15 @@ def start(
 
 
 def stop(
-    names: Iterable[str], *, home: Path = HOME, wait_s: float = STOP_WAIT_S
+    names: Iterable[str], *, where: Paths | None = None, wait_s: float = STOP_WAIT_S
 ) -> list[tuple[str, bool, str]]:
     """Ask each service to stop (it flushes its buffer first) and check it is gone."""
     asked = []
     results = []
     for name in names:
-        current = status(name, home)
+        current = status(name, where)
         if current.pid is None or not current.running:
-            _pid_file(name, home).unlink(missing_ok=True)
+            _pid_file(name, where).unlink(missing_ok=True)
             results.append((name, True, "not running"))
             continue
         os.kill(current.pid, signal.SIGTERM)
@@ -148,7 +148,7 @@ def stop(
         if _alive(proc.pid):
             results.append((proc.name, False, f"still running (pid {proc.pid})"))
         else:
-            _pid_file(proc.name, home).unlink(missing_ok=True)
+            _pid_file(proc.name, where).unlink(missing_ok=True)
             results.append((proc.name, True, "stopped"))
     return results
 
@@ -171,7 +171,9 @@ def last_seen(storage: StorageReader, dataset: Dataset, now: datetime) -> dateti
     return min(newest + timedelta(minutes=1), now)
 
 
-def health(storage_url: str, *, home: Path = HOME, now: datetime | None = None) -> dict[str, Any]:
+def health(
+    storage_url: str, *, where: Paths | None = None, now: datetime | None = None
+) -> dict[str, Any]:
     """The running setup: each process, the newest sample and call, the database.
 
     ``ok`` is true when all three processes run, the database answers and the
@@ -180,7 +182,7 @@ def health(storage_url: str, *, home: Path = HOME, now: datetime | None = None) 
     from ai_meterix.storage import open_reader
 
     now = now or datetime.now(timezone.utc)
-    processes = [status(name, home) for name in SERVICES]
+    processes = [status(name, where) for name in SERVICES]
     problems = [f"{p.name} is not running" for p in processes if not p.running]
     report: dict[str, Any] = {
         "processes": [

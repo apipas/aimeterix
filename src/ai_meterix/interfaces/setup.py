@@ -6,9 +6,10 @@ it creates the database, the two accounts (password = name, changed at first
 login), the live settings and the built-in providers. An existing database is
 never initialised twice: change it with ``aimeterix config``.
 
-``uninstall`` stops everything; with ``--purge`` it also deletes
-``~/.aimeterix`` (database, logs, buffers). Nothing else on the machine needs
-cleaning, except a database you put somewhere else, which is named, not deleted.
+``uninstall`` stops everything; with ``--purge`` it also deletes the AI Meterix
+folders (config, database, logs, buffers; ``core/paths.py``, record 0019).
+Nothing else on the machine needs cleaning, except a database you put somewhere
+else, which is named, not deleted. ``aimeterix paths`` prints every folder.
 """
 
 from __future__ import annotations
@@ -19,8 +20,7 @@ from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
 from ai_meterix.core.config import Config
-
-HOME = Path("~/.aimeterix")
+from ai_meterix.core.paths import LEGACY_HOME, Paths, paths
 
 
 def starter_text() -> str:
@@ -29,6 +29,7 @@ def starter_text() -> str:
 
 def write_starter(path: Path) -> None:
     """Write the starter file; never overwrites."""
+    path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "x", encoding="utf-8") as f:
         f.write(starter_text())
 
@@ -71,13 +72,50 @@ def sqlite_path(url: str) -> Path | None:
     return None if path in ("", ":memory:") else Path(path).expanduser()
 
 
-def purge(home: Path = HOME) -> bool:
-    """Delete ``~/.aimeterix``; True if there was something to delete."""
-    target = home.expanduser()
-    if not target.exists():
-        return False
-    shutil.rmtree(target)
-    return True
+def legacy_home() -> Path | None:
+    """The ``~/.aimeterix`` folder of builds before 0.1.0, if it is still there."""
+    old = LEGACY_HOME.expanduser()
+    return old if old.is_dir() and old not in paths().folders() else None
 
 
-__all__ = ["purge", "safe_url", "sqlite_path", "starter_text", "summary", "write_starter"]
+def where_lines(where: Paths, config_path: Path) -> list[str]:
+    def mark(path: Path) -> str:
+        return f"{path}" + ("" if path.exists() else "  (not created yet)")
+
+    return [
+        f"Config file    {mark(config_path)}",
+        f"Secrets        {mark(config_path.parent / '.env')}",
+        f"Data           {mark(where.data_dir)}",
+        f"Logs           {mark(where.log_dir)}",
+        f"Process IDs    {mark(where.run_dir)}",
+    ]
+
+
+def purge(where: Paths | None = None) -> list[Path]:
+    """Delete every AI Meterix folder; returns the ones that were there.
+
+    A folder that holds the home folder (a mistaken ``AIMETERIX_HOME=~``) is refused.
+    """
+    folders = (where or paths()).folders()
+    home = Path.home().resolve()
+    unsafe = [f for f in folders if home.is_relative_to(f.resolve())]
+    if unsafe:
+        raise ValueError(f"refusing to delete {unsafe[0]}: it holds your home folder")
+    deleted = []
+    for folder in folders:
+        if folder.exists():
+            shutil.rmtree(folder)
+            deleted.append(folder)
+    return deleted
+
+
+__all__ = [
+    "legacy_home",
+    "purge",
+    "safe_url",
+    "sqlite_path",
+    "starter_text",
+    "summary",
+    "where_lines",
+    "write_starter",
+]

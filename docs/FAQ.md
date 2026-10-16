@@ -22,7 +22,7 @@ Yes, if it answers in the OpenAI, Anthropic, Gemini or Ollama format: `aimeterix
 Token counts come from the provider's own response, so they match its bill. Energy totals are measured by the chip; the split between apps and models is an estimate from how much each process used. The dashboard shows how many hours were actually measured each day.
 
 **Where is my data, and how do I remove it?**
-In `~/.aimeterix/` (or the database you chose). `aimeterix uninstall --purge` stops everything and deletes it; then `pip uninstall ai-meterix`.
+`aimeterix paths` prints every folder. On macOS that is `~/Library/Application Support/aimeterix` and `~/Library/Logs/aimeterix`; on Linux `~/.config`, `~/.local/share` and `~/.local/state`, each with an `aimeterix` folder. `aimeterix uninstall --purge` stops everything and deletes them; then `pip uninstall ai-meterix`. A database you put elsewhere is named, not deleted.
 
 **Does it start when the Mac starts?**
 Not yet: run `aimeterix start` after a restart. Services that start at login come in a later version.

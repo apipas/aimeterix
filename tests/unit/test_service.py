@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from ai_meterix.core.paths import Paths, paths
 from ai_meterix.interfaces.cli import main
 from ai_meterix.interfaces.service import SERVICES, health, port_in_use, start, status, stop
 
@@ -19,53 +20,53 @@ def free_port() -> int:
 
 
 @pytest.fixture
-def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Paths:
     """An isolated ~ and database; the children inherit it through the environment."""
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("AIMETERIX_STORAGE_URL", f"sqlite:///{tmp_path / 'meter.db'}")
     monkeypatch.setenv("AIMETERIX_PROXY_PORT", str(free_port()))
     monkeypatch.setenv("AIMETERIX_API_PORT", str(free_port()))
     monkeypatch.chdir(tmp_path)
-    return tmp_path / ".aimeterix"
+    return paths()
 
 
-def test_start_runs_in_the_background_and_stop_leaves_nothing(home: Path) -> None:
-    results = {name: ok for name, ok, _ in start(["proxy", "serve"], home=home)}
+def test_start_runs_in_the_background_and_stop_leaves_nothing(home: Paths) -> None:
+    results = {name: ok for name, ok, _ in start(["proxy", "serve"], where=home)}
     assert results == {"proxy": True, "serve": True}
     for name in ("proxy", "serve"):
         assert status(name, home).running
-        assert (home / "run" / f"{name}.pid").exists()
-        assert (home / "logs" / f"{name}.log").exists()
-    again = start(["proxy"], home=home)
+        assert (home.run_dir / f"{name}.pid").exists()
+        assert (home.log_dir / f"{name}.log").exists()
+    again = start(["proxy"], where=home)
     assert again[0][1] and "already running" in again[0][2]  # never a second copy
     proxy_port = int(__import__("os").environ["AIMETERIX_PROXY_PORT"])
     assert port_in_use("127.0.0.1", proxy_port)
 
-    stopped = {name: (ok, msg) for name, ok, msg in stop(["proxy", "serve", "agent"], home=home)}
+    stopped = {name: (ok, msg) for name, ok, msg in stop(["proxy", "serve", "agent"], where=home)}
     assert stopped["proxy"] == (True, "stopped") and stopped["serve"] == (True, "stopped")
     assert stopped["agent"] == (True, "not running")
-    assert not list((home / "run").glob("*.pid"))
+    assert not list(home.run_dir.glob("*.pid"))
     assert not port_in_use("127.0.0.1", proxy_port)
-    assert "proxy stopped" in (home / "logs" / "proxy.log").read_text()  # flushed and exited
+    assert "proxy stopped" in (home.log_dir / "proxy.log").read_text()  # flushed and exited
 
 
-def test_a_service_that_fails_at_start_is_reported(home: Path) -> None:
-    (name, ok, message), = start(["agent"], home=home, python="/bin/false")  # fmt: skip
+def test_a_service_that_fails_at_start_is_reported(home: Paths) -> None:
+    (name, ok, message), = start(["agent"], where=home, python="/bin/false")  # fmt: skip
     assert name == "agent" and not ok and "exited at start" in message
-    assert not (home / "run" / "agent.pid").exists()
+    assert not (home.run_dir / "agent.pid").exists()
 
 
-def test_a_stale_pid_file_is_not_running(home: Path) -> None:
-    (home / "run").mkdir(parents=True)
-    (home / "run" / "agent.pid").write_text("999999\n")
+def test_a_stale_pid_file_is_not_running(home: Paths) -> None:
+    home.run_dir.mkdir(parents=True)
+    (home.run_dir / "agent.pid").write_text("999999\n")
     assert not status("agent", home).running
-    assert stop(["agent"], home=home) == [("agent", True, "not running")]
-    assert not (home / "run" / "agent.pid").exists()
+    assert stop(["agent"], where=home) == [("agent", True, "not running")]
+    assert not (home.run_dir / "agent.pid").exists()
 
 
-def test_health_names_what_is_missing(home: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    url = f"sqlite:///{home.parent / 'meter.db'}"
-    report = health(url, home=home)
+def test_health_names_what_is_missing(home: Paths, capsys: pytest.CaptureFixture[str]) -> None:
+    url = home.storage_url
+    report = health(url, where=home)
     assert not report["ok"] and [p["name"] for p in report["processes"]] == list(SERVICES)
     assert "agent is not running" in report["problems"]
     assert main(["health"]) == 1
@@ -75,7 +76,7 @@ def test_health_names_what_is_missing(home: Path, capsys: pytest.CaptureFixture[
     assert json.loads(capsys.readouterr().out)["ok"] is False
 
 
-def test_start_and_stop_commands(home: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_start_and_stop_commands(home: Paths, capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["start", "serve"]) == 0
     out = capsys.readouterr().out
     assert "serve  started" in out and "aimeterix health" in out

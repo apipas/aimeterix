@@ -683,18 +683,21 @@ def _confirm(question: str) -> bool:
 
 
 def _init(args: argparse.Namespace) -> int:
-    import os
-    from pathlib import Path
-
-    from ai_meterix.core.config import CONFIG_ENV, DEFAULT_CONFIG_FILE, load_config
+    from ai_meterix.core.config import config_file, load_config
     from ai_meterix.core.errors import AiMeterixError
     from ai_meterix.core.settings import seed_settings
     from ai_meterix.storage import open_writer
 
     from .auth import ensure_accounts
-    from .setup import safe_url, summary, write_starter
+    from .setup import legacy_home, safe_url, summary, write_starter
 
-    path = Path(args.config or os.environ.get(CONFIG_ENV) or DEFAULT_CONFIG_FILE).expanduser()
+    path = config_file(args.config)
+    old = legacy_home()
+    if old is not None:
+        print(
+            f"Note: {old} is from a build before 0.1.0 and is no longer used. "
+            "Delete it when you no longer need its data."
+        )
     if not path.is_file():
         try:
             write_starter(path)
@@ -762,9 +765,10 @@ def _init(args: argparse.Namespace) -> int:
 def _uninstall(args: argparse.Namespace) -> int:
     from ai_meterix.core.config import load_config
     from ai_meterix.core.errors import AiMeterixError
+    from ai_meterix.core.paths import paths
 
     from .service import SERVICES, stop
-    from .setup import HOME, purge, sqlite_path
+    from .setup import legacy_home, purge, sqlite_path
 
     ok = True
     for name, stopped, message in stop(SERVICES):
@@ -773,25 +777,50 @@ def _uninstall(args: argparse.Namespace) -> int:
     if not ok:
         print("aimeterix uninstall: something is still running; nothing deleted", file=sys.stderr)
         return 1
-    home = HOME.expanduser()
+    folders = paths().folders()
     outside = None
     try:
         db = sqlite_path(load_config(args.config).storage.url)
-        if db is not None and home not in db.resolve().parents:
+        if db is not None and not any(db.resolve().is_relative_to(f.resolve()) for f in folders):
             outside = db
     except AiMeterixError:
         pass
     if args.purge:
-        print(f"This deletes {home} for good: the database, logs and buffers.")
-        if not args.yes and not _confirm("Delete it?"):
+        print("This deletes for good the config, database, logs and buffers in:")
+        for folder in folders:
+            print(f"  {folder}")
+        if not args.yes and not _confirm("Delete them?"):
             print("Nothing deleted.")
             return 1
-        print(f"Deleted {home}." if purge() else f"{home} was not there.")
+        try:
+            deleted = purge()
+        except (OSError, ValueError) as exc:
+            print(f"aimeterix uninstall: {exc}", file=sys.stderr)
+            return 1
+        print("\n".join(f"Deleted {f}." for f in deleted) or "Nothing was there to delete.")
     else:
-        print(f"Your data is kept in {home}; `aimeterix uninstall --purge` deletes it.")
+        print("Your config and data are kept; `aimeterix uninstall --purge` deletes them.")
+        print("`aimeterix paths` shows where they are.")
     if outside is not None:
-        print(f"Your database {outside} is outside {home} and was not deleted.")
+        print(f"Your database {outside} is outside these folders and was not deleted.")
+    old = legacy_home()
+    if old is not None:
+        print(f"{old} is from a build before 0.1.0; delete it yourself if you no longer need it.")
     print("To remove the program: pip uninstall ai-meterix (or: uv tool uninstall ai-meterix)")
+    return 0
+
+
+def _paths(args: argparse.Namespace) -> int:
+    from ai_meterix.core.config import config_file
+    from ai_meterix.core.paths import paths
+
+    from .setup import legacy_home, where_lines
+
+    for line in where_lines(paths(), config_file(args.config)):
+        print(line)
+    old = legacy_home()
+    if old is not None:
+        print(f"Old folder     {old}  (from a build before 0.1.0, no longer used)")
     return 0
 
 
@@ -1142,16 +1171,22 @@ def build_parser() -> argparse.ArgumentParser:
         "init", help="first run: write the config file, then create the database"
     )
     init.add_argument("--yes", action="store_true", help="do not ask for confirmation")
-    init.add_argument("--config", help="path to aimeterix.yaml (default ./aimeterix.yaml)")
+    init.add_argument("--config", help="path to aimeterix.yaml (default: in the config folder)")
     init.set_defaults(func=_init)
 
     uninstall = commands.add_parser(
         "uninstall", help="stop everything; --purge also deletes the data"
     )
-    uninstall.add_argument("--purge", action="store_true", help="also delete ~/.aimeterix")
+    uninstall.add_argument(
+        "--purge", action="store_true", help="also delete the config, data and logs folders"
+    )
     uninstall.add_argument("--yes", action="store_true", help="do not ask for confirmation")
     uninstall.add_argument("--config", help="path to aimeterix.yaml")
     uninstall.set_defaults(func=_uninstall)
+
+    where = commands.add_parser("paths", help="show where the config, data and logs are")
+    where.add_argument("--config", help="path to aimeterix.yaml")
+    where.set_defaults(func=_paths)
 
     names = ("agent", "proxy", "serve")
     start = commands.add_parser("start", help="run the agent, proxy and API in the background")

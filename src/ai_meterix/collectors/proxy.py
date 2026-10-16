@@ -22,7 +22,7 @@ open relay.
 
 Calls are written through ``StorageWriter`` by a background thread about once
 a second. When the database is down they stay in memory, with a copy in
-``~/.aimeterix/proxy-buffer.jsonl``, and are written once it is back.
+``proxy-buffer.jsonl`` in the data folder, and are written once it is back.
 """
 
 from __future__ import annotations
@@ -47,11 +47,12 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from ai_meterix.core.model import Caller, CallType, LlmCall
+from ai_meterix.core.paths import paths
 from ai_meterix.core.timeutil import utc_now
 from ai_meterix.pricing.prices import ensure_price_row
 from ai_meterix.storage.base import StorageWriter
 
-from .agent import DATA_DIR, from_record, to_record
+from .agent import from_record, to_record
 from .usage import Usage, extract_usage
 
 log = logging.getLogger("ai_meterix.proxy")
@@ -228,13 +229,13 @@ class Recorder:
         self,
         open_storage: Callable[[], StorageWriter],
         *,
-        data_dir: Path = DATA_DIR,
+        data_dir: Path | None = None,
         flush_s: float = 1.0,
         max_pending: int = 100_000,
     ) -> None:
         self._open_storage = open_storage
         self._storage: StorageWriter | None = None
-        self.data_dir = data_dir.expanduser()
+        self.data_dir = (data_dir or paths().data_dir).expanduser()
         self.flush_s = flush_s
         self.max_pending = max_pending
         self._lock = threading.Lock()
