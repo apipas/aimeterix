@@ -200,7 +200,7 @@ def _proxy(args: argparse.Namespace) -> int:
         }
         if args.upstream:
             settings["default_upstream"] = args.upstream
-        if args.port:
+        if args.port is not None:  # 0 means any free port
             settings["port"] = args.port
         proxy_config = ProxyConfig.model_validate(settings)
     except (ConfigError, ValueError) as exc:
@@ -522,7 +522,7 @@ def _serve(args: argparse.Namespace) -> int:
     config = load_config(args.config)
     url = args.url or config.storage.url
     host = args.host or config.api.host
-    port = args.port or config.api.port
+    port = config.api.port if args.port is None else args.port  # 0: any free port
     try:
         storage = open_writer(url)
         try:
