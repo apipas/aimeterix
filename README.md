@@ -2,66 +2,83 @@
 
 **Know what your AI compute costs, what you waste, and what next month will cost.**
 
-AI Meterix is an open-source tool for teams running AI on their own GPUs, rented cloud GPUs and LLM APIs. It meters usage, prices it with *your* rates, tells you in plain language what to change, and forecasts next month with a range. Store the data in whatever you already use: SQLite, DuckDB, PostgreSQL, or your own connector.
+AI Meterix meters the AI work on your machine: the energy the chip uses, the tokens each model reads and writes, local or in the cloud, and what both cost in your currency. It runs on your machine, stores its data in a database you choose, and never stores prompts, answers or API keys.
 
-> **Status: early development.** Phases 1 and 2 are in progress: the data model, storage connectors (SQLite default, PostgreSQL, DuckDB), `aimeterix doctor`, the Apple Silicon agent, the LLM proxy and the cost engine (`usage`, `profile`, `prices`) the localhost API (`serve`) and live settings (`config`), `start` / `stop` / `health` and a read-only web dashboard exist. The advisor and forecast come next. Read the plan in [docs/PLAN.md](docs/PLAN.md).
+> **Status: 0.1 preview.** Hardware metering works on Apple Silicon Macs. The LLM proxy, cost engine, API and dashboard work on macOS and Linux. Advice and a monthly forecast come in 0.2. See [CHANGELOG.md](CHANGELOG.md) and the plan in [docs/PLAN.md](docs/PLAN.md).
 
-## Try it
+## Install
+
+You need Python 3.10 or newer.
 
 ```bash
-aimeterix doctor                 # what this machine can measure
-aimeterix agent                  # sample the hardware until Ctrl-C (--mock for a demo)
-aimeterix proxy --upstream http://127.0.0.1:8080   # meter a local llama.cpp server
-aimeterix profile set --rate 0.33 --fees 0   # your energy price and fees, in USD
-aimeterix usage                  # tokens, Wh and cost per model and day
-aimeterix prices                 # price per 1M tokens for each model
-aimeterix providers              # the AI providers apps can call through the proxy, local and cloud
-aimeterix prices apply-reference # copy the dated list of public prices (see `prices reference`)
-aimeterix serve                  # JSON API on http://127.0.0.1:8788/api with login
-aimeterix config                 # live settings; `config set agent.interval_s 5`
-aimeterix start                  # agent, proxy and API in the background (logs in ~/.aimeterix/logs)
-aimeterix health                 # is everything running and measuring now? (exit code 1 if not)
-aimeterix stop                   # stop them; buffers are written first (--keep-proxy keeps apps working)
+pip install ai-meterix                 # or: uv tool install ai-meterix
+pip install "ai-meterix[postgres]"     # to store data in PostgreSQL
+pip install "ai-meterix[duckdb]"       # to store data in DuckDB
 ```
 
-The first start of the agent, proxy or API copies the live settings (sampling interval, retention, default upstream and key allowlist) from `aimeterix.yaml` into the database. From then on the database wins: change them with `aimeterix config set KEY VALUE` or `PUT /api/config/<key>`, and the agent and proxy pick the change up within a minute, without a restart. `aimeterix config history` shows who changed what; `aimeterix config export FILE` writes the settings back to YAML. The database URL, addresses and ports, and secrets stay in the file or environment.
+Until the package is on PyPI: `pip install git+https://github.com/mabuthraa/gocompute.git`.
 
-Ten cloud providers are built in: OpenAI, Anthropic, Google Gemini, Mistral, Groq, Together AI, Fireworks AI, OpenRouter, DeepSeek and xAI. Point an app's base URL at the address `aimeterix providers` shows, e.g. `http://127.0.0.1:8787/groq/openai/v1`; its API key passes through and is never stored. Add any other provider or a local model server with `aimeterix providers add NAME --base-url URL`, and price its models with `aimeterix prices set MODEL --provider NAME`. A model with no price costs 0.
+## Quick start
 
-After `aimeterix start`, open the dashboard at http://127.0.0.1:8788/ (cost, energy, tokens and calls per day and per model, data coverage, health). It is read-only; change settings with `aimeterix config` or the API.
+```bash
+aimeterix init       # writes aimeterix.yaml in this folder; check it
+aimeterix init       # shows what it will set up, asks, creates the database
+aimeterix start      # runs the agent, proxy and dashboard in the background
+aimeterix health     # is everything measuring? (exit code 0 when healthy)
+```
 
-`aimeterix serve` creates two accounts, `user` (read) and `admin` (read and write), whose first password is their name and must be changed at first login (`POST /api/password`, or `aimeterix password admin`). Log in with `POST /api/login`, then send `Authorization: Bearer <token>`. Endpoints are listed in `src/ai_meterix/interfaces/api.py`.
+Then:
 
-Point your app at the proxy instead of the provider: `http://127.0.0.1:8787/openai/v1`, `http://127.0.0.1:8787/anthropic` or, with `--upstream`, `http://127.0.0.1:8787/v1`. Add `X-AIMeterix-App` and `X-AIMeterix-Feature` headers (or `/app/<name>/` in the path) to see who made each call. Only token counts, timings and tags are stored, never prompts, responses or keys.
+1. Open http://127.0.0.1:8788/ and log in as `user`, password `user`. You choose a new password the first time.
+2. Set your electricity price: `aimeterix profile set --rate 0.30` (USD per kWh).
+3. Point your apps at the proxy instead of the provider. `aimeterix providers` shows the address for each one, for example `http://127.0.0.1:8787/openai/v1`. Your app keeps its own API key; it passes through and is never stored.
+4. Load public token prices: `aimeterix prices apply-reference --dry-run`, then without `--dry-run`.
 
-## What it will answer
+`aimeterix stop` stops everything. `aimeterix uninstall --purge` also deletes the data in `~/.aimeterix`. The dashboard has a **Help** page that explains every number and lists every command with its options.
 
-| You ask | AI Meterix tells you |
-|---|---|
-| What did we spend? | One total across cloud GPUs, owned GPUs (with power) and LLM tokens |
-| What did we waste? | Idle GPU time priced in dollars, and when it happens |
-| What should we change? | Actions with an estimated saving |
-| What will next month cost? | A forecast with a likely range and a budget warning |
+## What it measures
 
-## Principles
+| | Cloud models | Local models (llama.cpp, Ollama, ...) |
+|---|---|---|
+| Calls and tokens | Per model: input, output, cache read and write | Same |
+| Energy | Not measured (it is spent in the provider's data center) | Measured on this machine, split by process |
+| Cost | Tokens × the model's price | The model's share of the energy × your rate |
 
-- **Advice first.** Every report leads with actions, not charts.
-- **Bring your own database.** Storage is a pluggable connector.
-- **Local first and private.** No account, no telemetry, prompts never stored.
+Ten cloud providers are built in: OpenAI, Anthropic, Google Gemini, Mistral, Groq, Together AI, Fireworks AI, OpenRouter, DeepSeek and xAI. Add any other provider, or a model server on your network, with `aimeterix providers add NAME --base-url URL`, and price its models with `aimeterix prices set MODEL --provider NAME`. A model with no price costs 0 until you set one.
+
+Calls that do not go through the proxy are not seen. AWS Bedrock cannot be metered through a proxy yet; Azure OpenAI works once you add your own address.
+
+## How it works
+
+Three small processes run on your machine, all started by `aimeterix start`:
+
+- **agent** samples the chip every few seconds (power, energy, CPU, GPU, memory) and which processes use it.
+- **proxy** sits between your apps and the AI providers. It forwards every call unchanged and records the model and token counts.
+- **serve** runs the API and the dashboard. Costs are computed from the measurements each time you look, so a corrected price also corrects past days.
+
+They are separate on purpose: if one stops, the proxy keeps forwarding, so your apps keep working. Each can also run on its own in a terminal (`aimeterix agent`, `aimeterix proxy`, `aimeterix serve`).
+
+Data goes to SQLite by default (`~/.aimeterix/meter.db`); PostgreSQL and DuckDB work too. Settings live in the database after `init`; change them with `aimeterix config`, `aimeterix providers` and `aimeterix prices`, or the admin API.
+
+## Privacy and security
+
+- Only counts are stored: model names, token numbers, timings, energy. Never prompts, answers or API keys.
+- The proxy, API and dashboard listen on this machine only (127.0.0.1). The only outbound connections are your own calls, forwarded to the provider you chose. No account, no telemetry, no update check.
+- No admin rights: nothing runs as root, and nothing is installed outside `~/.aimeterix` and the Python package.
+- Two accounts guard the API and dashboard: `user` reads, `admin` can also change settings. Passwords are salted scrypt hashes.
+
+To report a security problem, see [SECURITY.md](SECURITY.md). More answers in [docs/FAQ.md](docs/FAQ.md).
 
 ## Repository map
 
 | Path | What lives there |
 |---|---|
-| `docs/PLAN.md` | The phased plan and open decisions |
-| `docs/decisions/` | One short record per settled decision |
-| `src/ai_meterix/` | The package; `core/` holds the data model, config and plugin registry |
+| `src/ai_meterix/` | The package: `core/` data model and config, `collectors/` agent and proxy, `storage/` database connectors, `pricing/` cost engine, providers and prices, `interfaces/` command line, API and dashboard |
 | `tests/` | Unit, connector conformance and integration tests |
-| `examples/` | Sample config (`aimeterix.example.yaml`); showcase data later |
-| `deploy/` | Docker and docker-compose |
+| `docs/PLAN.md` | The phased plan |
+| `docs/decisions/` | One short record per settled decision |
+| `examples/` | The starter config (`aimeterix.example.yaml`) |
 
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). License: [Apache-2.0](LICENSE). See [NOTICE](NOTICE) for attribution.
-
-Decisions so far: [docs/decisions](docs/decisions/README.md).
