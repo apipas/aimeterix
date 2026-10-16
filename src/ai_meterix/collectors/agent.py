@@ -5,7 +5,7 @@ it in memory. Every ``flush_s`` it writes what it holds through ``StorageWriter`
 one kind of row at a time, so a failure never writes a row twice.
 
 When the database cannot be reached, the rows stay in memory and a copy goes to
-a buffer file in the data directory (``~/.aimeterix/agent-buffer.jsonl``), so a
+a buffer file in the data folder (``agent-buffer.jsonl``, ``core/paths.py``), so a
 restart does not lose them. The next successful flush writes the buffer first
 and deletes the file. The buffer is capped; when full, the oldest rows go first
 and the loss is counted.
@@ -43,6 +43,7 @@ from ai_meterix.core.model import (
     ProcessSample,
     Project,
 )
+from ai_meterix.core.paths import paths
 from ai_meterix.core.timeutil import utc_now
 from ai_meterix.storage.base import StorageWriter
 
@@ -50,7 +51,6 @@ from .base import HardwareBackend, SampleBatch
 
 log = logging.getLogger("ai_meterix.agent")
 
-DATA_DIR = Path("~/.aimeterix")
 BUFFER_FILE = "agent-buffer.jsonl"
 STATUS_FILE = "agent-status.json"
 MAX_INTERVAL_S = 300.0
@@ -238,7 +238,7 @@ class Agent:
         *,
         interval_s: float = 10.0,
         flush_s: float = 30.0,
-        data_dir: Path = DATA_DIR,
+        data_dir: Path | None = None,
         max_buffer_rows: int = 200_000,
         burst_s: float = 0.0,
         clock: Callable[[], float] = time.monotonic,
@@ -252,7 +252,7 @@ class Agent:
         self.base_interval_s = interval_s
         self.interval_s = interval_s
         self.flush_s = max(flush_s, interval_s)
-        self.data_dir = data_dir.expanduser()
+        self.data_dir = (data_dir or paths().data_dir).expanduser()
         self.max_buffer_rows = max_buffer_rows
         self._clock = clock
         self._burst_until = clock() + burst_s if burst_s > 0 else None

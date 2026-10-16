@@ -374,7 +374,7 @@ token cost  = tokens ÷ 1,000,000 × price per 1M tokens (per token type)</code>
 
     <h3 id="h-trouble">Troubleshooting</h3>
     <dl>
-      <dt>The page does not open</dt><dd>Run <code>aimeterix health</code>. If serve is stopped, run <code>aimeterix start</code> and check <code>~/.aimeterix/logs/serve.log</code>.</dd>
+      <dt>The page does not open</dt><dd>Run <code>aimeterix health</code>. If serve is stopped, run <code>aimeterix start</code> and check <code>serve.log</code> in the logs folder (<code>aimeterix paths</code> shows where).</dd>
       <dt>Calls or tokens stay at 0</dt><dd>Your app is calling the provider or model server directly. Change its base URL to the one <code>aimeterix providers</code> shows. For a local server called without a provider name, check that <code>proxy.default_upstream</code> points at it (<code>aimeterix config</code>).</dd>
       <dt>Energy stays at 0 or coverage is low</dt><dd>The agent is not running or cannot read the sensors. Run <code>aimeterix doctor</code> to see what this machine can measure, then check <code>~/.aimeterix/logs/agent.log</code>.</dd>
       <dt>Cost is $0</dt><dd>Set a cost profile and model prices; see <a href="#h-issues">Data issues</a>.</dd>
@@ -383,22 +383,22 @@ token cost  = tokens ÷ 1,000,000 × price per 1M tokens (per token type)</code>
 
     <h3 id="h-commands">Command reference</h3>
     <p>Every command and option. Type <code>aimeterix COMMAND --help</code> for the same list in the terminal, and <code>aimeterix --version</code> for the version. With uv, put <code>uv run</code> in front of each command. Times are written <code>90s</code>, <code>10m</code> or <code>2h</code>; days as <code>YYYY-MM-DD</code>.</p>
-    <p class="cmd-index"><a href="#c-init"><code>init</code></a>, <a href="#c-start"><code>start</code></a>, <a href="#c-stop"><code>stop</code></a>, <a href="#c-health"><code>health</code></a>, <a href="#c-agent"><code>agent</code></a>, <a href="#c-proxy"><code>proxy</code></a>, <a href="#c-serve"><code>serve</code></a>, <a href="#c-doctor"><code>doctor</code></a>, <a href="#c-usage"><code>usage</code></a>, <a href="#c-profile"><code>profile</code></a>, <a href="#c-providers"><code>providers</code></a>, <a href="#c-prices"><code>prices</code></a>, <a href="#c-config"><code>config</code></a>, <a href="#c-password"><code>password</code></a>, <a href="#c-uninstall"><code>uninstall</code></a></p>
+    <p class="cmd-index"><a href="#c-init"><code>init</code></a>, <a href="#c-start"><code>start</code></a>, <a href="#c-stop"><code>stop</code></a>, <a href="#c-health"><code>health</code></a>, <a href="#c-agent"><code>agent</code></a>, <a href="#c-proxy"><code>proxy</code></a>, <a href="#c-serve"><code>serve</code></a>, <a href="#c-doctor"><code>doctor</code></a>, <a href="#c-usage"><code>usage</code></a>, <a href="#c-profile"><code>profile</code></a>, <a href="#c-providers"><code>providers</code></a>, <a href="#c-prices"><code>prices</code></a>, <a href="#c-config"><code>config</code></a>, <a href="#c-password"><code>password</code></a>, <a href="#c-paths"><code>paths</code></a>, <a href="#c-uninstall"><code>uninstall</code></a></p>
     <p class="muted">First run: init. Running: start, stop, health. Each service on its own: agent, proxy, serve. Checking: doctor, usage. Costs and settings: profile, providers, prices, config, password. Removing: uninstall.</p>
     
     <div class="cmd" id="c-init">
       <h4><code>aimeterix init</code></h4>
-      <p>The first command on a new machine. Without a config file it writes a commented <code>aimeterix.yaml</code> in the current folder and stops, so you can check it. Run it again: it shows what it will set up, asks you to confirm, creates the database with the accounts <code>user</code> and <code>admin</code> and the built-in providers, checks what this machine can measure, and prints the next steps. It never sets up a database twice.</p>
+      <p>The first command on a new machine. Without a config file it writes a commented <code>aimeterix.yaml</code> in the config folder and stops, so you can check it. Run it again: it shows what it will set up, asks you to confirm, creates the database with the accounts <code>user</code> and <code>admin</code> and the built-in providers, checks what this machine can measure, and prints the next steps. It never sets up a database twice.</p>
       <pre class="usage"><code>aimeterix init [--yes] [--config FILE]</code></pre>
-      <div class="scroll"><table class="opts"><tr><th>Option</th><th>What it does</th></tr><tr><td><code>--yes</code></td><td>Do not ask for confirmation, for scripts.</td></tr><tr><td><code>--config FILE</code></td><td>Use this config file (default <code>./aimeterix.yaml</code>, or <code>AIMETERIX_CONFIG</code>).</td></tr></table></div>
+      <div class="scroll"><table class="opts"><tr><th>Option</th><th>What it does</th></tr><tr><td><code>--yes</code></td><td>Do not ask for confirmation, for scripts.</td></tr><tr><td><code>--config FILE</code></td><td>Use this config file (default: <code>aimeterix.yaml</code> in the config folder, or <code>AIMETERIX_CONFIG</code>).</td></tr></table></div>
       <p class="ex-label">Examples</p>
-<pre><code>aimeterix init          <span class="cm"># writes aimeterix.yaml</span>
+<pre><code>aimeterix init          <span class="cm"># writes the config file and says where</span>
 aimeterix init          <span class="cm"># shows the summary and asks</span>
 aimeterix init --yes --config ~/aimeterix.yaml</code></pre>
     </div>
     <div class="cmd" id="c-start">
       <h4><code>aimeterix start</code></h4>
-      <p>Starts the agent, proxy and API (serve) in the background, all three by default. They keep running after you close the terminal. Logs go to <code>~/.aimeterix/logs</code>. If one is already running it is left alone.</p>
+      <p>Starts the agent, proxy and API (serve) in the background, all three by default. They keep running after you close the terminal. Logs go to the logs folder (<code>aimeterix paths</code>). If one is already running it is left alone.</p>
       <pre class="usage"><code>aimeterix start [agent] [proxy] [serve] [--config FILE]</code></pre>
       <div class="scroll"><table class="opts"><tr><th>Option</th><th>What it does</th></tr><tr><td><code>agent proxy serve</code></td><td>Start only the ones you name. Default: all three.</td></tr><tr><td><code>--config FILE</code></td><td>Use this <code>aimeterix.yaml</code> instead of the default one.</td></tr></table></div>
       <p class="ex-label">Examples</p>
@@ -524,11 +524,20 @@ aimeterix config set proxy.default_upstream http://127.0.0.1:8081
 aimeterix config reset agent.interval_s
 aimeterix config export backup.yaml</code></pre>
     </div>
+    <div class="cmd" id="c-paths">
+      <h4><code>aimeterix paths</code></h4>
+      <p>Shows where AI Meterix keeps its files, the same from any folder you run it in. On macOS the config, <code>.env</code> and database are in <code>~/Library/Application Support/aimeterix</code> and the logs in <code>~/Library/Logs/aimeterix</code>. On Linux they follow XDG: <code>~/.config/aimeterix</code>, <code>~/.local/share/aimeterix</code> and <code>~/.local/state/aimeterix</code>. Set <code>AIMETERIX_HOME</code> to keep everything in one folder of your choice.</p>
+      <pre class="usage"><code>aimeterix paths [--config FILE]</code></pre>
+      <div class="scroll"><table class="opts"><tr><th>Option</th><th>What it does</th></tr><tr><td><code>--config FILE</code></td><td>Show the folders for this <code>aimeterix.yaml</code> instead of the default one.</td></tr></table></div>
+      <p class="ex-label">Examples</p>
+<pre><code>aimeterix paths
+AIMETERIX_HOME=~/meter aimeterix paths   <span class="cm"># everything in ~/meter</span></code></pre>
+    </div>
     <div class="cmd" id="c-uninstall">
       <h4><code>aimeterix uninstall</code></h4>
-      <p>Stops everything. With <code>--purge</code> it also deletes <code>~/.aimeterix</code>: the database, logs and buffers. A database kept somewhere else is named, never deleted. Then remove the program with <code>pip uninstall ai-meterix</code>.</p>
+      <p>Stops everything. With <code>--purge</code> it also deletes the AI Meterix folders: the config, database, logs and buffers. A database kept somewhere else is named, never deleted. Then remove the program with <code>pip uninstall ai-meterix</code>.</p>
       <pre class="usage"><code>aimeterix uninstall [--purge] [--yes] [--config FILE]</code></pre>
-      <div class="scroll"><table class="opts"><tr><th>Option</th><th>What it does</th></tr><tr><td><code>--purge</code></td><td>Also delete <code>~/.aimeterix</code>, after asking.</td></tr><tr><td><code>--yes</code></td><td>Do not ask for confirmation.</td></tr><tr><td><code>--config FILE</code></td><td>Use this <code>aimeterix.yaml</code> instead of the default one.</td></tr></table></div>
+      <div class="scroll"><table class="opts"><tr><th>Option</th><th>What it does</th></tr><tr><td><code>--purge</code></td><td>Also delete the config, data and logs folders, after listing them and asking.</td></tr><tr><td><code>--yes</code></td><td>Do not ask for confirmation.</td></tr><tr><td><code>--config FILE</code></td><td>Use this <code>aimeterix.yaml</code> instead of the default one.</td></tr></table></div>
       <p class="ex-label">Examples</p>
 <pre><code>aimeterix uninstall            <span class="cm"># stop, keep the data</span>
 aimeterix uninstall --purge    <span class="cm"># stop and delete the data</span></code></pre>

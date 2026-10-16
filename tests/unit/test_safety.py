@@ -3,7 +3,7 @@
 - No code path uses sudo or starts other programs. The one exception is
   ``aimeterix start`` / ``stop`` (``interfaces/service.py``), which start and
   stop AI Meterix's own processes and ask ``ps`` whether a PID is still ours.
-- Nothing is written outside ``~/.aimeterix/``.
+- Nothing is written outside the AI Meterix folders (``core/paths.py``).
 - Servers listen on 127.0.0.1 only; the only connections go to this machine
   or, for the proxy, to the provider the user chose.
 
@@ -32,6 +32,7 @@ import pytest
 from ai_meterix.collectors.proxy import Recorder, Router, serve
 from ai_meterix.collectors.runtimes import local_fetch
 from ai_meterix.core.config import load_config
+from ai_meterix.core.paths import paths
 from ai_meterix.storage import open_writer
 
 SRC = Path(__file__).parents[2] / "src" / "ai_meterix"
@@ -150,7 +151,9 @@ class Sandbox:
         self.hook.write_text(_HOOK, encoding="utf-8")
         self.record = tmp_path / "events.json"
         self.env = {
-            k: v for k, v in os.environ.items() if not k.startswith(("AIMETERIX_", "PYTHON"))
+            k: v
+            for k, v in os.environ.items()
+            if not k.startswith(("AIMETERIX_", "PYTHON", "XDG_"))
         }
         self.env.update(HOME=str(self.home), PYTHONDONTWRITEBYTECODE="1")
 
@@ -171,12 +174,18 @@ class Sandbox:
         return events
 
     def check_writes(self, events: list[list[Any]]) -> list[str]:
-        allowed = (self.home / ".aimeterix").resolve()
+        allowed = [f.resolve() for f in paths(self.env).folders()]
         writes = sorted({e[1] for e in events if e[0] == "write"})
-        outside = [w for w in writes if not Path(w).resolve().is_relative_to(allowed)]
-        assert outside == [], f"written outside ~/.aimeterix: {outside}"
+        outside = [  # a folder above them is created, not written
+            w
+            for w in writes
+            if not any(
+                Path(w).resolve().is_relative_to(a) or a.is_relative_to(Path(w).resolve())
+                for a in allowed
+            )
+        ]
+        assert outside == [], f"written outside the AI Meterix folders: {outside}"
         assert list(self.cwd.iterdir()) == []
-        assert [p.name for p in self.home.iterdir()] == [".aimeterix"]
         return writes
 
 
@@ -262,7 +271,7 @@ def test_servers_default_to_loopback(tmp_path: Path, monkeypatch: pytest.MonkeyP
     config = load_config(env={})
     assert (config.proxy.host, config.proxy.port) == ("127.0.0.1", 8787)
     assert (config.api.host, config.api.port) == ("127.0.0.1", 8788)
-    assert config.storage.url == "sqlite:///~/.aimeterix/meter.db"
+    assert config.storage.url == paths().storage_url
 
 
 @pytest.mark.parametrize("host", ["0.0.0.0", "::", "192.168.1.10"])
