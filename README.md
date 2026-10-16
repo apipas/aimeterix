@@ -8,7 +8,19 @@ AI Meterix meters the AI work on your machine: the energy the chip uses, the tok
 
 ## Install
 
-You need Python 3.10 or newer.
+Each [release](https://github.com/mabuthraa/gocompute/releases/latest) has a macOS installer that carries its own Python, so nothing else is needed. Pick the one for your Mac's processor (Apple menu > About This Mac shows "Apple M…" or "Intel"):
+
+| Mac | Download | Installs to |
+|---|---|---|
+| Apple Silicon (M1 and later) | `ai-meterix-<version>-macos-arm64.pkg` | `/usr/local/ai-meterix` |
+| Intel | `ai-meterix-<version>-macos-x86_64.pkg` | `/usr/local/ai-meterix` |
+| Either, without an admin password | `ai-meterix-<version>-macos-<processor>.tar.gz`, then `./install.sh` | `~/.local` |
+
+The installer shows the default settings first and, when it is done, the commands, the dashboard address and where the manual is. It asks for your password once, to install; AI Meterix itself never runs as root. It is not signed yet: if macOS says the developer cannot be verified, open System Settings > Privacy & Security and choose Open Anyway.
+
+Or in one line, for this user only: `curl -fsSL https://github.com/mabuthraa/gocompute/releases/latest/download/install.sh | sh`
+
+On Linux, or with Python 3.10 or newer anywhere, install the Python package (Linux installers are coming soon):
 
 ```bash
 pip install ai-meterix                 # or: uv tool install ai-meterix
@@ -18,11 +30,16 @@ pip install "ai-meterix[duckdb]"       # to store data in DuckDB
 
 Until the package is on PyPI: `pip install git+https://github.com/mabuthraa/gocompute.git`.
 
+## Coming soon
+
+- Linux and Windows installers and hardware metering
+- Advice on what to save, and a monthly cost forecast
+- General improvements
+
 ## Quick start
 
 ```bash
-aimeterix init       # writes the config file and says where; check it
-aimeterix init       # shows what it will set up, asks, creates the database
+aimeterix init       # shows the default settings, lets you change any, creates the database
 aimeterix start      # runs the agent, proxy and dashboard in the background
 aimeterix health     # is everything measuring? (exit code 0 when healthy)
 ```
@@ -72,7 +89,7 @@ Set `AIMETERIX_HOME` to keep everything in one folder instead. Data goes to SQLi
 
 - Only counts are stored: model names, token numbers, timings, energy. Never prompts, answers or API keys.
 - The proxy, API and dashboard listen on this machine only (127.0.0.1). The only outbound connections are your own calls, forwarded to the provider you chose. No account, no telemetry, no update check.
-- No admin rights: nothing runs as root, and nothing is written outside the folders above and the Python package.
+- No admin rights at run time: nothing runs as root, and nothing is written outside the folders above and the program's own folder. Only the `.pkg` and `.deb` installers ask for a password, once, to install the program.
 - Two accounts guard the API and dashboard: `user` reads, `admin` can also change settings. Passwords are salted scrypt hashes.
 
 To report a security problem, see [SECURITY.md](SECURITY.md). More answers in [docs/FAQ.md](docs/FAQ.md).

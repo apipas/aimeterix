@@ -8,7 +8,13 @@ import pytest
 
 from ai_meterix.core.paths import Paths, paths
 from ai_meterix.interfaces.cli import main
-from ai_meterix.interfaces.setup import purge, safe_url, starter_text
+from ai_meterix.interfaces.setup import (
+    purge,
+    removal_hint,
+    safe_url,
+    set_value,
+    starter_text,
+)
 from ai_meterix.storage import open_reader
 
 
@@ -25,22 +31,24 @@ def test_the_example_file_is_the_starter_file() -> None:
     assert (root / "examples" / "aimeterix.example.yaml").read_text() == starter_text()
 
 
-def test_init_writes_a_starter_file_then_creates_the_database(
+def answers(monkeypatch: pytest.MonkeyPatch, *replies: str) -> None:
+    queue = list(replies)
+    monkeypatch.setattr("builtins.input", lambda _: queue.pop(0))
+
+
+def test_init_writes_the_defaults_then_creates_the_database(
     where: Paths,
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    assert main(["init"]) == 0
-    assert where.config_file.read_text() == starter_text()
-    assert "run `aimeterix init` again" in capsys.readouterr().out
-    assert not where.db_file.exists()  # nothing created yet
-    assert list(tmp_path.iterdir()) == []  # nothing in the folder the command ran from
-
-    monkeypatch.setattr("builtins.input", lambda _: "n")
+    answers(monkeypatch, "n", "n")  # change nothing, create nothing
     assert main(["init"]) == 1
-    assert "Nothing changed" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert where.config_file.read_text() == starter_text()
+    assert "with the default settings" in out and "Nothing changed" in out
     assert not where.db_file.exists()
+    assert list(tmp_path.iterdir()) == []  # nothing in the folder the command ran from
 
     assert main(["init", "--yes"]) == 0
     out = capsys.readouterr().out
@@ -52,6 +60,44 @@ def test_init_writes_a_starter_file_then_creates_the_database(
 
     assert main(["init", "--yes"]) == 1  # never twice
     assert "already set up" in capsys.readouterr().err
+
+
+def test_init_lets_you_change_the_defaults(
+    where: Paths, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # change? proxy port, local server, dashboard port, interval, database; create?
+    answers(monkeypatch, "y", "8080", "http://127.0.0.1:8081", "", "", "", "y")
+    assert main(["init"]) == 0
+    text = where.config_file.read_text()
+    assert "  port: 8080\n" in text and "  default_upstream: http://127.0.0.1:8081\n" in text
+    assert "  port: 8788\n" in text and "# Ten cloud providers" in text  # the rest is kept
+    assert "Saved in" in capsys.readouterr().out
+    with open_reader(where.storage_url) as storage:
+        settings = storage.get_settings()
+        assert settings["proxy.default_upstream"].value == "http://127.0.0.1:8081"
+
+
+def test_a_bad_answer_leaves_the_file_as_it_was(
+    where: Paths, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    answers(monkeypatch, "n", "n")
+    main(["init"])
+    answers(monkeypatch, "y", "", "", "", "0", "")  # interval 0 is out of range
+    assert main(["init"]) == 2
+    assert where.config_file.read_text() == starter_text()
+    assert not where.db_file.exists()
+
+
+def test_set_value_keeps_comments_and_switches_on_a_commented_key() -> None:
+    text = "proxy:\n  port: 8787    # the port\n  # default_upstream: http://x\napi:\n  port: 1\n"
+    text = set_value(text, "proxy", "port", "9000")
+    text = set_value(text, "proxy", "default_upstream", "http://y")
+    text = set_value(text, "proxy", "host", "127.0.0.1")
+    text = set_value(text, "storage", "url", "sqlite:///m.db")
+    assert text == (
+        "proxy:\n  host: 127.0.0.1\n  port: 9000    # the port\n  default_upstream: http://y\n"
+        "api:\n  port: 1\n\nstorage:\n  url: sqlite:///m.db\n"
+    )
 
 
 def test_every_command_uses_the_same_config_from_any_folder(
@@ -79,19 +125,17 @@ def test_init_refuses_a_bad_config_file(where: Paths) -> None:
 def test_init_never_assumes_yes_without_a_terminal(
     where: Paths, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    assert main(["init"]) == 0
-
     def no_terminal(_: str) -> str:
         raise EOFError
 
     monkeypatch.setattr("builtins.input", no_terminal)
     assert main(["init"]) == 1
+    assert where.config_file.exists() and not where.db_file.exists()
 
 
 def test_uninstall_keeps_the_data_unless_purged(
     where: Paths, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    assert main(["init"]) == 0
     assert main(["init", "--yes"]) == 0
     capsys.readouterr()
     assert main(["uninstall"]) == 0
@@ -132,6 +176,24 @@ def test_paths_shows_every_folder_and_the_old_one(
     out = capsys.readouterr().out
     assert str(where.config_file) in out and str(where.log_dir) in out
     assert "not created yet" in out and "before 0.1.0" in out
+
+
+@pytest.mark.parametrize(
+    ("kind", "hint"),
+    [
+        ("deb", "sudo apt remove ai-meterix"),
+        ("pkg", "pkgutil --forget"),
+        ("script", "rm -rf"),
+        (None, "pip uninstall ai-meterix"),
+    ],
+)
+def test_uninstall_says_how_the_program_was_installed(
+    tmp_path: Path, kind: str | None, hint: str
+) -> None:
+    (tmp_path / "python").mkdir()
+    if kind:
+        (tmp_path / "INSTALLED_BY").write_text(f"{kind}\n")
+    assert hint in removal_hint(str(tmp_path / "python"))
 
 
 def test_passwords_never_show_in_the_summary() -> None:

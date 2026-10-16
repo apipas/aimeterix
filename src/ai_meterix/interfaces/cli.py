@@ -16,6 +16,8 @@ from typing import TYPE_CHECKING
 from ai_meterix import __version__
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from ai_meterix.core.config import Config
     from ai_meterix.core.model import Provider
     from ai_meterix.core.settings import SettingsWatcher
@@ -704,9 +706,8 @@ def _init(args: argparse.Namespace) -> int:
         except OSError as exc:
             print(f"aimeterix init: cannot write {path}: {exc}", file=sys.stderr)
             return 1
-        print(f"Wrote a starter config file: {path}")
-        print("Check it (the defaults suit one Mac), then run `aimeterix init` again.")
-        return 0
+        print(f"Wrote the config file {path} with the default settings.")
+        print()
     try:
         config = load_config(path)
     except AiMeterixError as exc:
@@ -716,6 +717,16 @@ def _init(args: argparse.Namespace) -> int:
     for line in summary(config, path.resolve()):
         print(f"  {line}")
     print()
+    if not args.yes and _confirm("Change any of these first?"):
+        changed = _edit_config(path, config)
+        if changed is None:
+            return 2
+        config = changed
+        print()
+        print("AI Meterix will set up:")
+        for line in summary(config, path.resolve()):
+            print(f"  {line}")
+        print()
     if not args.yes and not _confirm("Create the database?"):
         print("Nothing changed.")
         return 1
@@ -755,11 +766,48 @@ def _init(args: argparse.Namespace) -> int:
     print("Next:")
     print("  1. aimeterix start        run the agent, proxy and dashboard in the background")
     print("  2. aimeterix health       check everything is measuring")
-    print(f"  3. open http://{api.host}:{api.port}/ and log in as user (password: user)")
+    print(f"  3. open http://{api.host}:{api.port}/ and log in as user (password: user);")
+    print(f"     the manual is at http://{api.host}:{api.port}/#help")
     print("  4. aimeterix profile set --rate 0.30   your electricity price per kWh (after start)")
     print(f"  5. point your apps at the proxy, e.g. http://{proxy.host}:{proxy.port}/openai/v1;")
     print("     `aimeterix providers` lists the address for each provider")
     return 0
+
+
+def _ask(question: str, current: str) -> str:
+    try:
+        answer = input(f"  {question} [{current or 'none'}]: ").strip()
+    except EOFError:
+        return current
+    return answer or current
+
+
+def _edit_config(path: Path, config: Config) -> Config | None:
+    """Ask for each main value (Enter keeps it), then write the file and check it."""
+    from ai_meterix.core.config import load_config
+    from ai_meterix.core.errors import AiMeterixError
+
+    from .setup import CHOICES, set_value
+
+    print("Press Enter to keep a value.")
+    before = path.read_text(encoding="utf-8")
+    text = before
+    for choice in CHOICES:
+        current = choice.current(config)
+        answer = _ask(choice.question, current)
+        if answer != current:
+            text = set_value(text, choice.section, choice.key, answer)
+    if text == before:
+        return config
+    path.write_text(text, encoding="utf-8")
+    try:
+        new = load_config(path)
+    except AiMeterixError as exc:
+        path.write_text(before, encoding="utf-8")
+        print(f"aimeterix init: {exc}; the file was left as it was.", file=sys.stderr)
+        return None
+    print(f"Saved in {path}.")
+    return new
 
 
 def _uninstall(args: argparse.Namespace) -> int:
@@ -768,7 +816,7 @@ def _uninstall(args: argparse.Namespace) -> int:
     from ai_meterix.core.paths import paths
 
     from .service import SERVICES, stop
-    from .setup import legacy_home, purge, sqlite_path
+    from .setup import legacy_home, purge, removal_hint, sqlite_path
 
     ok = True
     for name, stopped, message in stop(SERVICES):
@@ -806,7 +854,7 @@ def _uninstall(args: argparse.Namespace) -> int:
     old = legacy_home()
     if old is not None:
         print(f"{old} is from a build before 0.1.0; delete it yourself if you no longer need it.")
-    print("To remove the program: pip uninstall ai-meterix (or: uv tool uninstall ai-meterix)")
+    print(f"To remove the program: {removal_hint()}")
     return 0
 
 

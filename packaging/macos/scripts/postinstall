@@ -1,0 +1,6 @@
+#!/bin/sh
+# Puts `aimeterix` on the PATH; /usr/local/bin is on it by default on macOS.
+set -e
+mkdir -p /usr/local/bin
+ln -sf /usr/local/ai-meterix/bin/aimeterix /usr/local/bin/aimeterix
+exit 0

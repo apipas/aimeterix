@@ -1,0 +1,38 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 13px -apple-system, system-ui, sans-serif; line-height: 1.5; margin: 0 4px; }
+  h1 { font-size: 17px; margin: 0 0 4px; }
+  h2 { font-size: 13px; margin: 16px 0 4px; }
+  table { border-collapse: collapse; }
+  td { padding: 1px 12px 1px 0; vertical-align: top; }
+  code { font: 12px ui-monospace, Menlo, monospace; }
+  .muted { opacity: .7; }
+  ul { margin: 4px 0; padding-left: 18px; }
+</style></head>
+<body>
+<h1>AI Meterix @VERSION@</h1>
+<p>Measures what AI costs on this Mac: the energy the chip uses, the tokens each model reads and writes, local or in the cloud, and what both cost in your currency.</p>
+
+<h2>Default settings</h2>
+<p class="muted">After installing, <code>aimeterix init</code> shows these again and lets you change any of them.</p>
+<table>
+  <tr><td>Proxy</td><td><code>http://127.0.0.1:8787</code>, where your apps send their AI calls</td></tr>
+  <tr><td>Dashboard</td><td><code>http://127.0.0.1:8788</code>, accounts <code>user</code> and <code>admin</code></td></tr>
+  <tr><td>Local model server</td><td>none; set it to your llama.cpp or Ollama address</td></tr>
+  <tr><td>Database</td><td>SQLite in <code>~/Library/Application Support/aimeterix</code></td></tr>
+  <tr><td>Samples</td><td>every 10 seconds; raw data kept 30 days, hourly totals 365</td></tr>
+</table>
+<p>Everything listens on this Mac only. Prompts, answers and API keys are never stored.</p>
+
+<h2>What gets installed</h2>
+<p>The program and its own Python in <code>/usr/local/ai-meterix</code>, and the <code>aimeterix</code> command in <code>/usr/local/bin</code>. Nothing starts by itself. Your password is needed once, to install; AI Meterix never runs as root.</p>
+
+<h2>Coming soon</h2>
+<ul>
+  <li>Linux and Windows</li>
+  <li>Advice on what to save and a monthly forecast</li>
+  <li>General improvements</li>
+</ul>
+</body></html>
