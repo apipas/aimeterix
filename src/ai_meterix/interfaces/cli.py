@@ -675,6 +675,126 @@ def _providers(args: argparse.Namespace) -> int:
         storage.close()
 
 
+def _confirm(question: str) -> bool:
+    try:
+        return input(f"{question} [y/N] ").strip().lower() in ("y", "yes")
+    except EOFError:  # no terminal: never assume yes
+        return False
+
+
+def _init(args: argparse.Namespace) -> int:
+    import os
+    from pathlib import Path
+
+    from ai_meterix.core.config import CONFIG_ENV, DEFAULT_CONFIG_FILE, load_config
+    from ai_meterix.core.errors import AiMeterixError
+    from ai_meterix.core.settings import seed_settings
+    from ai_meterix.storage import open_writer
+
+    from .auth import ensure_accounts
+    from .setup import safe_url, summary, write_starter
+
+    path = Path(args.config or os.environ.get(CONFIG_ENV) or DEFAULT_CONFIG_FILE).expanduser()
+    if not path.is_file():
+        try:
+            write_starter(path)
+        except OSError as exc:
+            print(f"aimeterix init: cannot write {path}: {exc}", file=sys.stderr)
+            return 1
+        print(f"Wrote a starter config file: {path}")
+        print("Check it (the defaults suit one Mac), then run `aimeterix init` again.")
+        return 0
+    try:
+        config = load_config(path)
+    except AiMeterixError as exc:
+        print(f"aimeterix init: {exc}", file=sys.stderr)
+        return 2
+    print("AI Meterix will set up:")
+    for line in summary(config, path.resolve()):
+        print(f"  {line}")
+    print()
+    if not args.yes and not _confirm("Create the database?"):
+        print("Nothing changed.")
+        return 1
+    try:
+        storage = open_writer(config.storage.url)
+    except AiMeterixError as exc:
+        print(f"aimeterix init: {exc}", file=sys.stderr)
+        return 1
+    try:
+        version = storage.schema_version()
+        if version is not None:
+            print(
+                f"aimeterix init: {safe_url(config.storage.url)} is already set up "
+                f"(schema v{version}). Change settings with `aimeterix config` and "
+                "`aimeterix providers`; to start again from nothing, run "
+                "`aimeterix uninstall --purge` first.",
+                file=sys.stderr,
+            )
+            return 1
+        storage.migrate()
+        ensure_accounts(storage)
+        seed_settings(storage, config)
+    finally:
+        storage.close()
+    print("Database created, with the accounts user and admin and the built-in providers.")
+    print()
+    try:
+        from ai_meterix.collectors.probe import probe
+
+        from .doctor import render
+
+        print(render(probe()))
+    except Exception as exc:  # the database is ready either way
+        print(f"(could not check this machine: {exc}; run `aimeterix doctor`)")
+    proxy, api = config.proxy, config.api
+    print()
+    print("Next:")
+    print("  1. aimeterix start        run the agent, proxy and dashboard in the background")
+    print("  2. aimeterix health       check everything is measuring")
+    print(f"  3. open http://{api.host}:{api.port}/ and log in as user (password: user)")
+    print("  4. aimeterix profile set --rate 0.30   your electricity price per kWh (after start)")
+    print(f"  5. point your apps at the proxy, e.g. http://{proxy.host}:{proxy.port}/openai/v1;")
+    print("     `aimeterix providers` lists the address for each provider")
+    return 0
+
+
+def _uninstall(args: argparse.Namespace) -> int:
+    from ai_meterix.core.config import load_config
+    from ai_meterix.core.errors import AiMeterixError
+
+    from .service import SERVICES, stop
+    from .setup import HOME, purge, sqlite_path
+
+    ok = True
+    for name, stopped, message in stop(SERVICES):
+        print(f"{name:<6} {message}")
+        ok = ok and stopped
+    if not ok:
+        print("aimeterix uninstall: something is still running; nothing deleted", file=sys.stderr)
+        return 1
+    home = HOME.expanduser()
+    outside = None
+    try:
+        db = sqlite_path(load_config(args.config).storage.url)
+        if db is not None and home not in db.resolve().parents:
+            outside = db
+    except AiMeterixError:
+        pass
+    if args.purge:
+        print(f"This deletes {home} for good: the database, logs and buffers.")
+        if not args.yes and not _confirm("Delete it?"):
+            print("Nothing deleted.")
+            return 1
+        print(f"Deleted {home}." if purge() else f"{home} was not there.")
+    else:
+        print(f"Your data is kept in {home}; `aimeterix uninstall --purge` deletes it.")
+    if outside is not None:
+        print(f"Your database {outside} is outside {home} and was not deleted.")
+    print("To remove the program: pip uninstall ai-meterix (or: uv tool uninstall ai-meterix)")
+    return 0
+
+
 def _config(args: argparse.Namespace) -> int:
     import getpass
 
@@ -1017,6 +1137,21 @@ def build_parser() -> argparse.ArgumentParser:
     providers.add_argument("--url", help="storage URL (default: from the config)")
     providers.add_argument("--config", help="path to aimeterix.yaml")
     providers.set_defaults(func=_providers)
+
+    init = commands.add_parser(
+        "init", help="first run: write the config file, then create the database"
+    )
+    init.add_argument("--yes", action="store_true", help="do not ask for confirmation")
+    init.add_argument("--config", help="path to aimeterix.yaml (default ./aimeterix.yaml)")
+    init.set_defaults(func=_init)
+
+    uninstall = commands.add_parser(
+        "uninstall", help="stop everything; --purge also deletes the data"
+    )
+    uninstall.add_argument("--purge", action="store_true", help="also delete ~/.aimeterix")
+    uninstall.add_argument("--yes", action="store_true", help="do not ask for confirmation")
+    uninstall.add_argument("--config", help="path to aimeterix.yaml")
+    uninstall.set_defaults(func=_uninstall)
 
     names = ("agent", "proxy", "serve")
     start = commands.add_parser("start", help="run the agent, proxy and API in the background")

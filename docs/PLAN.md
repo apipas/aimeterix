@@ -422,9 +422,9 @@ Items we discussed and agreed to postpone. Each is reviewed again when its stage
 | Phase | Status |
 |---|---|
 | 0. Foundations | ✅ done: records 0001 to 0009 accepted |
-| 1. Core and storage connectors | 🟢 decisions settled (record 0010); ready to build |
-| 2. Collectors | 🟢 decisions settled (record 0011); ready to build after Phase 1 |
-| 3. Cost engine | 🟢 decisions settled (records 0012 to 0014); ready to build after Phase 2 |
-| 4. Advisor and forecast | 🟢 decisions settled (record 0015); ready to build after Phase 3 |
-| 5. Interfaces | 🟢 decisions settled (record 0016); slim MVP-1, ready to build after Phase 4 |
-| 6. Release v0.1.0 | ⚪ not started |
+| 1. Core and storage connectors | ✅ done: SQLite, DuckDB and Postgres connectors (record 0010) |
+| 2. Collectors | ✅ done: macOS agent and LLM proxy (record 0011) |
+| 3. Cost engine | ✅ done: energy, fixed and token costs, prices, providers (records 0012 to 0014, 0018) |
+| 4. Advisor and forecast | 🟢 decisions settled (record 0015); next, for 0.2 |
+| 5. Interfaces | 🟡 CLI, API and dashboard done (records 0016, 0017); advisor views wait for Phase 4 |
+| 6. Release v0.1.0 | 🟡 preview: `init`, `uninstall`, security pass, package and docs done; CI and a 24-hour run on a real Mac left. Docker, demo and launch material move after 0.2 |
