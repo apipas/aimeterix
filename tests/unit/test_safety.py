@@ -59,11 +59,18 @@ def _docstrings(tree: ast.Module) -> set[int]:
     return ids
 
 
+_SHOWN_ONLY = {("interfaces/setup.py", "removal_hint")}
+
+
 def test_no_code_uses_sudo_or_starts_programs() -> None:
     found = []
     for path, tree in _sources():
         where = path.relative_to(SRC)
         docs = _docstrings(tree)
+        # text printed for the user to run, e.g. how to remove a .deb; never executed
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and (str(where), node.name) in _SHOWN_ONLY:
+                docs |= {id(n) for n in ast.walk(node) if isinstance(n, ast.Constant)}
         launcher = where == _LAUNCHER
         for node in ast.walk(tree):
             if launcher and not isinstance(node, ast.Constant):

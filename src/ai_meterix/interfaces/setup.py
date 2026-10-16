@@ -14,7 +14,10 @@ else, which is named, not deleted. ``aimeterix paths`` prints every folder.
 
 from __future__ import annotations
 
+import re
 import shutil
+import sys
+from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
@@ -32,6 +35,49 @@ def write_starter(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "x", encoding="utf-8") as f:
         f.write(starter_text())
+
+
+@dataclass(frozen=True, slots=True)
+class Choice:
+    """One value `init` offers to change, written back into the config file."""
+
+    section: str
+    key: str
+    question: str
+
+    def current(self, config: Config) -> str:
+        value = getattr(getattr(config, self.section), self.key)
+        return "" if value is None else f"{value:g}" if isinstance(value, float) else str(value)
+
+
+CHOICES = (
+    Choice("proxy", "port", "Proxy port (apps send their AI calls here)"),
+    Choice("proxy", "default_upstream", "Local model server, e.g. http://127.0.0.1:8081"),
+    Choice("api", "port", "Dashboard port"),
+    Choice("agent", "interval_s", "Seconds between hardware samples (1 to 300)"),
+    Choice("storage", "url", "Database URL"),
+)
+
+
+def set_value(text: str, section: str, key: str, value: str) -> str:
+    """Set ``section.key`` in the YAML text, keeping its comments and layout.
+
+    A commented-out key (``# key: ...``) is switched on; a missing one is added
+    under its section, and a missing section at the end.
+    """
+    lines = text.splitlines(keepends=True)
+    start = next((i for i, line in enumerate(lines) if line.rstrip() == f"{section}:"), None)
+    if start is None:
+        return text.rstrip("\n") + f"\n\n{section}:\n  {key}: {value}\n"
+    end = next((i for i in range(start + 1, len(lines)) if re.match(r"\S", lines[i])), len(lines))
+    pattern = re.compile(rf"^  (?:# )?{re.escape(key)}:[^#\n]*?(\s+#.*)?$")
+    for i in range(start + 1, end):
+        match = pattern.match(lines[i].rstrip("\n"))
+        if match:
+            lines[i] = f"  {key}: {value}{match.group(1) or ''}\n"
+            return "".join(lines)
+    lines.insert(start + 1, f"  {key}: {value}\n")
+    return "".join(lines)
 
 
 def safe_url(url: str) -> str:
@@ -91,6 +137,23 @@ def where_lines(where: Paths, config_path: Path) -> list[str]:
     ]
 
 
+def removal_hint(prefix: str = sys.prefix) -> str:
+    """How to remove the program, from the marker its installer left (packaging/)."""
+    root = Path(prefix).parent
+    marker = root / "INSTALLED_BY"
+    kind = marker.read_text().strip() if marker.is_file() else ""
+    if kind == "deb":
+        return "sudo apt remove ai-meterix"
+    if kind == "pkg":
+        return (
+            f"sudo rm -rf {root} /usr/local/bin/aimeterix && "
+            "sudo pkgutil --forget io.github.mabuthraa.aimeterix"
+        )
+    if kind == "script":
+        return f"rm -rf {root} {root.parent.parent / 'bin' / 'aimeterix'}"
+    return "pip uninstall ai-meterix (or: uv tool uninstall ai-meterix)"
+
+
 def purge(where: Paths | None = None) -> list[Path]:
     """Delete every AI Meterix folder; returns the ones that were there.
 
@@ -110,9 +173,13 @@ def purge(where: Paths | None = None) -> list[Path]:
 
 
 __all__ = [
+    "CHOICES",
+    "Choice",
     "legacy_home",
     "purge",
+    "removal_hint",
     "safe_url",
+    "set_value",
     "sqlite_path",
     "starter_text",
     "summary",
