@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import socket
 from pathlib import Path
 
@@ -51,7 +52,9 @@ def test_start_runs_in_the_background_and_stop_leaves_nothing(home: Paths) -> No
 
 
 def test_a_service_that_fails_at_start_is_reported(home: Paths) -> None:
-    (name, ok, message), = start(["agent"], where=home, python="/bin/false")  # fmt: skip
+    false = shutil.which("false")  # /bin/false on Linux, /usr/bin/false on macOS
+    assert false is not None
+    (name, ok, message), = start(["agent"], where=home, python=false)  # fmt: skip
     assert name == "agent" and not ok and "exited at start" in message
     assert not (home.run_dir / "agent.pid").exists()
 
