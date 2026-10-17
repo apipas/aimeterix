@@ -1,4 +1,4 @@
-"""Platform probe (record 0009, PLAN.md Phase 2 step 1).
+"""Platform probe (record 0009).
 
 The probe detects the machine (OS, architecture, chip, cores, memory) and
 checks, by actually reading each source once, whether every metric is

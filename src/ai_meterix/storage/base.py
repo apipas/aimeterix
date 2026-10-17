@@ -1,4 +1,4 @@
-"""Storage contract every connector implements (PLAN.md 2.2; records 0010, 0014).
+"""Storage contract every connector implements (records 0010, 0014).
 
 Collectors, engines and interfaces only ever talk to storage through these
 two protocols. ``StorageReader`` is read only (reports, the API ``user`` role);

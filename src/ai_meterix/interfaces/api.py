@@ -1,4 +1,4 @@
-"""The localhost API (PLAN.md Phase 3 step 6, record 0013).
+"""The localhost API (record 0013).
 
 A small JSON API on ``127.0.0.1:8788`` (standard library only), run by
 ``aimeterix serve``. It uses the same computation as the CLI, so both return

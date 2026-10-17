@@ -1,4 +1,4 @@
-"""Canonical data model (PLAN.md 2.1; records 0010, 0011, 0012, 0014).
+"""Canonical data model (records 0010, 0011, 0012, 0014).
 
 Raw events and configuration entities only. Costs, recommendations and
 forecasts are derived elsewhere and never stored here.

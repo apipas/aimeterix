@@ -1,4 +1,4 @@
-"""The cost engine (PLAN.md Phase 3 step 4, record 0012).
+"""The cost engine (record 0012).
 
 Costs are derived, never stored: every statement is computed on demand from
 what storage holds, so editing a price or a cost profile changes past figures

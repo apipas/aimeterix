@@ -1,4 +1,4 @@
-"""``aimeterix start`` / ``stop`` / ``health`` (PLAN.md Phase 5 steps 1b and 1c, record 0016).
+"""``aimeterix start`` / ``stop`` / ``health`` (record 0016).
 
 One command runs the agent, the proxy and the API in the background, each as
 its own process, so a crash in one never stops the proxy that apps depend on.
