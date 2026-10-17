@@ -1,69 +1,214 @@
-# AI Meterix
+# 📊 AI Meterix
 
-AI Meterix shows what AI costs on your Mac. It measures the energy your chip uses for local models (llama.cpp, Ollama) and counts the tokens every model uses, local or in the cloud. It turns both into money in your currency, in a dashboard on your machine.
+**See what AI really costs on your Mac: energy, tokens and money, in one local dashboard.**
 
-It runs only on your machine. It never stores prompts, answers or API keys.
+We're excited to ship this small tool to help **developers, indie makers and small teams who run local models (llama.cpp, Ollama) or pay for cloud AI APIs** to **measure the energy their Mac spends on AI, count every token each model uses, and turn both into a clear daily cost.**
 
-## Versions
+![The AI Meterix dashboard: cost, energy, tokens and calls for the last 7 days](docs/images/dashboard.png)
 
-| Version | Status | What it has |
-|---|---|---|
-| 0.1.0 | Preview | Energy metering on Apple Silicon Macs, token counting for 10 cloud providers and local models, daily costs, a local dashboard |
+## 🚀 Installation
 
-All changes are listed in [CHANGELOG.md](CHANGELOG.md).
+### One line (recommended)
 
-### Coming soon
-
-- Linux and Windows support
-- Advice on what to change to save money, and a monthly cost forecast
-- General improvements
-
-## Install
-
-**One line** (macOS, Apple Silicon or Intel, no admin password):
+For macOS on Apple Silicon or Intel. No admin password needed.
 
 ```bash
 curl -fsSL https://github.com/apipas-com/aimeterix/releases/latest/download/install.sh | sh
 ```
 
-It downloads the right build for your Mac, installs it, and starts AI Meterix.
+- ✅ Downloads the right build for your Mac from GitHub
+- ✅ Checks its SHA-256
+- ✅ Installs it in `~/.local` with its own Python
+- ✅ Adds `aimeterix` to your PATH
+- ✅ Starts AI Meterix and prints the dashboard address
 
-**Installer package:** download the `.pkg` for your Mac from the [releases page](https://github.com/apipas-com/aimeterix/releases/latest): `macos-arm64` for Apple Silicon (M1 and later), `macos-x86_64` for Intel. Then run `aimeterix start` in Terminal. The package is not signed yet: if macOS blocks it, open System Settings > Privacy & Security and choose Open Anyway.
+### Installer package
 
-**From source** (needs [uv](https://docs.astral.sh/uv/)):
+1. Download the `.pkg` for your Mac from the [releases page](https://github.com/apipas-com/aimeterix/releases/latest):
+   - Apple Silicon (M1 and later): `ai-meterix-<version>-macos-arm64.pkg`
+   - Intel: `ai-meterix-<version>-macos-x86_64.pkg`
+2. Double-click it and follow the steps.
+3. Start AI Meterix in Terminal:
 
 ```bash
-git clone https://github.com/apipas-com/aimeterix.git && cd aimeterix
+aimeterix start
+```
+
+> ⚠️ The package is not signed yet. If macOS blocks it, open **System Settings > Privacy & Security** and choose **Open Anyway**.
+
+### From source
+
+Needs [uv](https://docs.astral.sh/uv/).
+
+```bash
+git clone https://github.com/apipas-com/aimeterix.git
+```
+
+```bash
+cd aimeterix
+```
+
+```bash
 uv run aimeterix start
 ```
 
-## Use it
+## ▶️ Get started
 
-| | Address |
-|---|---|
-| Dashboard | http://127.0.0.1:8788/ (log in as `user`, password `user`; you choose a new one at first login) |
-| Manual | http://127.0.0.1:8788/#help |
-| Proxy for your apps | http://127.0.0.1:8787/ (for example `http://127.0.0.1:8787/openai/v1`) |
+1. Open the dashboard at http://127.0.0.1:8788/
+   - Log in as `user`, password `user`
+   - You choose a new password the first time
+2. Set your electricity price per kWh:
 
-To have your apps' AI calls counted, point them at the proxy instead of the provider. Your app keeps its own API key. `aimeterix providers` shows the address for each provider.
+```bash
+aimeterix profile set --rate 0.30
+```
 
-| Command | What it does |
-|---|---|
-| `aimeterix start` | Start AI Meterix in the background (again after a restart of the Mac) |
-| `aimeterix stop` | Stop it |
-| `aimeterix health` | Check that everything is running and measuring |
-| `aimeterix profile set --rate 0.30` | Set your electricity price per kWh |
-| `aimeterix usage` | Show today's usage and costs in Terminal |
-| `aimeterix providers` | List the AI providers and their proxy addresses |
-| `aimeterix init` | Optional, before the first start: change the default ports or database |
-| `aimeterix paths` | Show where the settings, data and logs are |
-| `aimeterix uninstall --purge` | Stop and delete all settings and data |
-| `aimeterix --help` | Every command |
+3. Point your apps at the proxy instead of the provider, for example `http://127.0.0.1:8787/openai/v1`. Your app keeps its own API key. To see the address for each provider:
 
-## Privacy
+```bash
+aimeterix providers
+```
 
-Only counts are stored: model names, token numbers, timings and energy. Everything listens on 127.0.0.1 only. There is no account, no telemetry and no update check. See [SECURITY.md](SECURITY.md) to report a problem.
+4. Check that everything is measuring:
 
-## License
+```bash
+aimeterix health
+```
 
-[Apache-2.0](LICENSE). To help, see [CONTRIBUTING.md](CONTRIBUTING.md).
+## 🧭 How it works
+
+```mermaid
+flowchart LR
+    apps["Your apps"] -->|AI calls| proxy["proxy<br/>127.0.0.1:8787"]
+    proxy -->|forwarded unchanged| cloud["Cloud AI<br/>OpenAI, Anthropic, ..."]
+    proxy -->|forwarded unchanged| local["Local models<br/>llama.cpp, Ollama"]
+    chip["Mac chip<br/>CPU, GPU, power"] -->|every 10 s| agent["agent"]
+    proxy -->|model and token counts| db[("Database<br/>on your Mac")]
+    agent -->|energy per app and model| db
+    db --> serve["dashboard<br/>127.0.0.1:8788"]
+```
+
+- 🔀 **proxy:** your apps send their AI calls here. It forwards each call unchanged and notes the model and token counts.
+- ⚡ **agent:** every 10 seconds it reads the chip's power and which apps use it, so a local model's energy is measured.
+- 📈 **dashboard:** turns the counts into costs with your prices and electricity rate.
+
+## 💾 Where your data lives
+
+- 🗄️ **Database:** `~/Library/Application Support/aimeterix/meter.db` (SQLite; PostgreSQL and DuckDB work too)
+- ⚙️ **Settings:** `~/Library/Application Support/aimeterix/aimeterix.yaml`
+- 📝 **Logs:** `~/Library/Logs/aimeterix`
+- ✅ **Kept:** model names, token counts, timings, energy
+- 🚫 **Never kept:** prompts, answers, API keys
+- 🏠 **Nothing leaves your Mac** except your own calls to the provider you chose
+
+To print these folders:
+
+```bash
+aimeterix paths
+```
+
+## 🛠️ Commands
+
+### Run
+
+Start everything in the background (run it again after a restart of the Mac):
+
+```bash
+aimeterix start
+```
+
+Stop everything:
+
+```bash
+aimeterix stop
+```
+
+### Check
+
+Is everything running and measuring?
+
+```bash
+aimeterix health
+```
+
+Today's usage and costs in Terminal:
+
+```bash
+aimeterix usage
+```
+
+What this Mac can measure:
+
+```bash
+aimeterix doctor
+```
+
+### Costs and settings
+
+Your electricity price per kWh:
+
+```bash
+aimeterix profile set --rate 0.30
+```
+
+The AI providers and their proxy addresses:
+
+```bash
+aimeterix providers
+```
+
+Load public token prices:
+
+```bash
+aimeterix prices apply-reference
+```
+
+Change the default ports or database before the first start (optional):
+
+```bash
+aimeterix init
+```
+
+### Remove
+
+Stop and delete all settings and data:
+
+```bash
+aimeterix uninstall --purge
+```
+
+### Help
+
+Every command and option:
+
+```bash
+aimeterix --help
+```
+
+The full manual is also in the dashboard: http://127.0.0.1:8788/#help
+
+## 📦 Versions
+
+- **0.1.0 (preview):**
+  - Energy metering on Apple Silicon Macs
+  - Token counting for 10 cloud providers and local models
+  - Daily costs and a local dashboard
+
+All changes are in [CHANGELOG.md](CHANGELOG.md).
+
+### 🔮 Coming soon
+
+- 🐧 Linux and Windows support
+- 💡 Advice on what to change to save money
+- 📅 A monthly cost forecast
+- ✨ General improvements
+
+## 🔒 Security
+
+- Everything listens on 127.0.0.1 only
+- No account, no telemetry, no update check
+- To report a problem, see [SECURITY.md](SECURITY.md)
+
+## 📄 License
+
+[Apache-2.0](LICENSE). Want to help? See [CONTRIBUTING.md](CONTRIBUTING.md).
