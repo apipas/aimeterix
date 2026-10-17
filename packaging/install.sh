@@ -15,7 +15,7 @@
 # shell profile alone.
 set -eu
 
-REPO="mabuthraa/gocompute"
+REPO="apipas-com/aimeterix"
 PREFIX="${AIMETERIX_PREFIX:-$HOME/.local}"
 VERSION="${AIMETERIX_VERSION:-latest}"
 
@@ -115,6 +115,6 @@ Commands (in a new terminal):
   aimeterix stop       stop everything
   aimeterix --help     every command
 
-Online      https://github.com/mabuthraa/gocompute
+Online      https://github.com/apipas-com/aimeterix
 Remove      aimeterix uninstall --purge
 EOF

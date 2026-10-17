@@ -147,7 +147,7 @@ def removal_hint(prefix: str = sys.prefix) -> str:
     if kind == "pkg":
         return (
             f"sudo rm -rf {root} /usr/local/bin/aimeterix && "
-            "sudo pkgutil --forget io.github.mabuthraa.aimeterix"
+            "sudo pkgutil --forget com.apipas.aimeterix"
         )
     if kind == "script":
         return (

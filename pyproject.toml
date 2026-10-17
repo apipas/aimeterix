@@ -31,9 +31,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/mabuthraa/gocompute"
-Issues = "https://github.com/mabuthraa/gocompute/issues"
-Changelog = "https://github.com/mabuthraa/gocompute/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/apipas-com/aimeterix"
+Issues = "https://github.com/apipas-com/aimeterix/issues"
+Changelog = "https://github.com/apipas-com/aimeterix/blob/main/CHANGELOG.md"
 
 [project.scripts]
 aimeterix = "ai_meterix.interfaces.cli:main"

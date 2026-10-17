@@ -1,4 +1,4 @@
-"""Apple Silicon sampling backend (PLAN.md Phase 2 step 1b, records 0009 and 0011).
+"""Apple Silicon sampling backend (records 0009 and 0011).
 
 Each ``sample`` call reads the counters once and turns the change since the
 previous call into samples:

@@ -23,5 +23,5 @@ Phase 3 turns usage into money. The owner wants the output to read like a cloud 
 - The cost engine needs no background job and adds no sampling load.
 - With fixed fees, the fee share usually outweighs energy on a single small device; the idle overhead line shows what unused time costs.
 - Editable price history is flexible but can change past figures; the change log keeps this traceable.
-- Hardware amortization, provider export import, batch metering, time-of-day rates and more are in the PLAN backlog.
+- Hardware amortization, provider export import, batch metering, time-of-day rates and more are in the backlog.
 - Related changes to the data model, storage and collectors are in record 0014; configuration and API access in record 0013.

@@ -1,4 +1,4 @@
-"""The hardware agent loop (PLAN.md Phase 2 steps 1d and 1e, records 0011 and 0017).
+"""The hardware agent loop (records 0011 and 0017).
 
 Every ``interval_s`` the agent asks its backend for one ``SampleBatch`` and keeps
 it in memory. Every ``flush_s`` it writes what it holds through ``StorageWriter``,

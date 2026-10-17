@@ -1,6 +1,6 @@
 # Contributing to AI Meterix
 
-Thanks for helping. The project is in early development: feedback on [docs/PLAN.md](docs/PLAN.md) is still the most useful contribution.
+Thanks for helping. The project is in early development: bug reports and feedback in [issues](https://github.com/apipas-com/aimeterix/issues) are the most useful contribution.
 
 ## How decisions are made
 Open questions are listed per phase in the plan. Once settled, each gets a short record in `docs/decisions/` using the template there. Code follows decisions, not the other way round.

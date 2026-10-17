@@ -1,4 +1,4 @@
-"""The LLM proxy against a fake provider on 127.0.0.1 (PLAN.md Phase 2 step 2)."""
+"""The LLM proxy against a fake provider on 127.0.0.1."""
 
 from __future__ import annotations
 

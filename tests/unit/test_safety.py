@@ -1,4 +1,4 @@
-"""Record 0017 guarantees, tested (PLAN.md Phase 2 step 1e).
+"""Record 0017 guarantees, tested.
 
 - No code path uses sudo or starts other programs. The one exception is
   ``aimeterix start`` / ``stop`` (``interfaces/service.py``), which start and

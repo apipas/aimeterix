@@ -32,7 +32,7 @@ Build locally: `uv build`, then `python packaging/build.py dist/*.whl --target a
 
 | Package | Program | Command | Removed by |
 |---|---|---|---|
-| `.pkg` | `/usr/local/ai-meterix` | `/usr/local/bin/aimeterix` | `sudo rm -rf /usr/local/ai-meterix /usr/local/bin/aimeterix && sudo pkgutil --forget io.github.mabuthraa.aimeterix` |
+| `.pkg` | `/usr/local/ai-meterix` | `/usr/local/bin/aimeterix` | `sudo rm -rf /usr/local/ai-meterix /usr/local/bin/aimeterix && sudo pkgutil --forget com.apipas.aimeterix` |
 | `.deb` | `/opt/ai-meterix` | `/usr/bin/aimeterix` | `sudo apt remove ai-meterix` |
 | `install.sh` | `~/.local/lib/ai-meterix` | `~/.local/bin/aimeterix` | `rm -rf ~/.local/lib/ai-meterix ~/.local/bin/aimeterix`, and the PATH line it added to the shell profile |
 

@@ -1,4 +1,4 @@
-"""The LLM proxy (PLAN.md Phase 2 step 2, records 0011, 0014 and 0017).
+"""The LLM proxy (records 0011, 0014 and 0017).
 
 Apps point their SDK's base URL at the proxy and it forwards every request,
 streaming included, to the provider unchanged. On the way back it reads the
