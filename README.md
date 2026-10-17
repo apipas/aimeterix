@@ -1,6 +1,6 @@
 # 📊 AI Meterix
 
-**See what AI really costs on your Mac: energy, tokens and money, in one local dashboard.**
+**AI Meterix is a free, open-source meter that shows what AI really costs you: energy, tokens and money, all in one private dashboard.**
 
 We're excited to ship this small tool to help **developers, indie makers and small teams who run local models (llama.cpp, Ollama) or pay for cloud AI APIs** to **measure the energy their Mac spends on AI, count every token each model uses, and turn both into a clear daily cost.**
 
