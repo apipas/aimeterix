@@ -241,13 +241,12 @@ pre code { background: none; border: 0; padding: 0; }
     </ul>
 
     <h3 id="h-start">Getting started</h3>
-    <p>Run these in a terminal, in the project folder (with <code>uv run</code> in front if you use uv):</p>
-<pre><code>aimeterix init       <span class="cm"># once: shows the default settings, lets you change them, creates the database</span>
-aimeterix start      <span class="cm"># start the agent, proxy and API in the background</span>
+    <p>Run these in a terminal (from a source checkout, put <code>uv run</code> in front):</p>
+<pre><code>aimeterix start      <span class="cm"># start the agent, proxy and API in the background; the first start sets up the defaults</span>
 aimeterix health     <span class="cm"># check everything runs and measures (exit code 0 = healthy)</span>
 aimeterix profile set --rate 0.30   <span class="cm"># once: your electricity price per kWh</span>
 aimeterix stop       <span class="cm"># stop all three; data in memory is written first</span></code></pre>
-    <p>Then open this page at <code>127.0.0.1:8788</code> in your browser. Point your AI apps at the proxy (port <code>8787</code> on this machine by default; change the port with <code>AIMETERIX_PROXY_PORT</code>) instead of calling the model server directly, so their calls are counted. Logs are in <code>~/.aimeterix/logs</code>. The services keep running after you close the terminal, but not after a restart of the machine: run <code>aimeterix start</code> again.</p>
+    <p>Then open this page at <code>127.0.0.1:8788</code> in your browser. Point your AI apps at the proxy (port <code>8787</code> on this machine by default; change the port with <code>AIMETERIX_PROXY_PORT</code>) instead of calling the model server directly, so their calls are counted. <code>aimeterix paths</code> shows where the settings, data and logs are. To choose ports or a database before the first start, run <code>aimeterix init</code> first. The services keep running after you close the terminal, but not after a restart of the machine: run <code>aimeterix start</code> again.</p>
 
     <h3 id="h-parts">How it works</h3>
     <dl>
@@ -384,11 +383,11 @@ token cost  = tokens ÷ 1,000,000 × price per 1M tokens (per token type)</code>
     <h3 id="h-commands">Command reference</h3>
     <p>Every command and option. Type <code>aimeterix COMMAND --help</code> for the same list in the terminal, and <code>aimeterix --version</code> for the version. With uv, put <code>uv run</code> in front of each command. Times are written <code>90s</code>, <code>10m</code> or <code>2h</code>; days as <code>YYYY-MM-DD</code>.</p>
     <p class="cmd-index"><a href="#c-init"><code>init</code></a>, <a href="#c-start"><code>start</code></a>, <a href="#c-stop"><code>stop</code></a>, <a href="#c-health"><code>health</code></a>, <a href="#c-agent"><code>agent</code></a>, <a href="#c-proxy"><code>proxy</code></a>, <a href="#c-serve"><code>serve</code></a>, <a href="#c-doctor"><code>doctor</code></a>, <a href="#c-usage"><code>usage</code></a>, <a href="#c-profile"><code>profile</code></a>, <a href="#c-providers"><code>providers</code></a>, <a href="#c-prices"><code>prices</code></a>, <a href="#c-config"><code>config</code></a>, <a href="#c-password"><code>password</code></a>, <a href="#c-paths"><code>paths</code></a>, <a href="#c-uninstall"><code>uninstall</code></a></p>
-    <p class="muted">First run: init. Running: start, stop, health. Each service on its own: agent, proxy, serve. Checking: doctor, usage. Costs and settings: profile, providers, prices, config, password. Removing: uninstall.</p>
+    <p class="muted">Before the first start, optional: init. Running: start, stop, health. Each service on its own: agent, proxy, serve. Checking: doctor, usage. Costs and settings: profile, providers, prices, config, password. Removing: uninstall.</p>
     
     <div class="cmd" id="c-init">
       <h4><code>aimeterix init</code></h4>
-      <p>The first command on a new machine. Without a config file it first writes a commented <code>aimeterix.yaml</code> with the default settings in the config folder. It shows what it will set up and offers to change the main values (proxy port, local model server, dashboard port, sample interval, database); press Enter to keep one. Then it asks you to confirm, creates the database with the accounts <code>user</code> and <code>admin</code> and the built-in providers, checks what this machine can measure, and prints the next steps. It never sets up a database twice.</p>
+      <p>Optional, before the first start: <code>aimeterix start</code> sets up the defaults by itself. Use <code>init</code> to review or change them first. Without a config file it first writes a commented <code>aimeterix.yaml</code> with the default settings in the config folder. It shows what it will set up and offers to change the main values (proxy port, local model server, dashboard port, sample interval, database); press Enter to keep one. Then it asks you to confirm, creates the database with the accounts <code>user</code> and <code>admin</code> and the built-in providers, checks what this machine can measure, and prints the next steps. It never sets up a database twice.</p>
       <pre class="usage"><code>aimeterix init [--yes] [--config FILE]</code></pre>
       <div class="scroll"><table class="opts"><tr><th>Option</th><th>What it does</th></tr><tr><td><code>--yes</code></td><td>Keep the settings in the file and do not ask, for scripts.</td></tr><tr><td><code>--config FILE</code></td><td>Use this config file (default: <code>aimeterix.yaml</code> in the config folder, or <code>AIMETERIX_CONFIG</code>).</td></tr></table></div>
       <p class="ex-label">Examples</p>
@@ -397,7 +396,7 @@ aimeterix init --yes --config ~/aimeterix.yaml</code></pre>
     </div>
     <div class="cmd" id="c-start">
       <h4><code>aimeterix start</code></h4>
-      <p>Starts the agent, proxy and API (serve) in the background, all three by default. They keep running after you close the terminal. Logs go to the logs folder (<code>aimeterix paths</code>). If one is already running it is left alone.</p>
+      <p>Starts the agent, proxy and API (serve) in the background, all three by default. They keep running after you close the terminal. Logs go to the logs folder (<code>aimeterix paths</code>). If one is already running it is left alone. The first start writes the config file with the default settings; the database is created by the processes themselves.</p>
       <pre class="usage"><code>aimeterix start [agent] [proxy] [serve] [--config FILE]</code></pre>
       <div class="scroll"><table class="opts"><tr><th>Option</th><th>What it does</th></tr><tr><td><code>agent proxy serve</code></td><td>Start only the ones you name. Default: all three.</td></tr><tr><td><code>--config FILE</code></td><td>Use this <code>aimeterix.yaml</code> instead of the default one.</td></tr></table></div>
       <p class="ex-label">Examples</p>

@@ -150,7 +150,10 @@ def removal_hint(prefix: str = sys.prefix) -> str:
             "sudo pkgutil --forget io.github.mabuthraa.aimeterix"
         )
     if kind == "script":
-        return f"rm -rf {root} {root.parent.parent / 'bin' / 'aimeterix'}"
+        return (
+            f"rm -rf {root} {root.parent.parent / 'bin' / 'aimeterix'}, then delete the line "
+            "marked 'AI Meterix' from your shell profile (~/.zshrc or ~/.bashrc) if there is one"
+        )
     return "pip uninstall ai-meterix (or: uv tool uninstall ai-meterix)"
 
 

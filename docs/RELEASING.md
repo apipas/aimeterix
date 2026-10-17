@@ -34,9 +34,9 @@ Build locally: `uv build`, then `python packaging/build.py dist/*.whl --target a
 |---|---|---|---|
 | `.pkg` | `/usr/local/ai-meterix` | `/usr/local/bin/aimeterix` | `sudo rm -rf /usr/local/ai-meterix /usr/local/bin/aimeterix && sudo pkgutil --forget io.github.mabuthraa.aimeterix` |
 | `.deb` | `/opt/ai-meterix` | `/usr/bin/aimeterix` | `sudo apt remove ai-meterix` |
-| `install.sh` | `~/.local/lib/ai-meterix` | `~/.local/bin/aimeterix` | `rm -rf ~/.local/lib/ai-meterix ~/.local/bin/aimeterix` |
+| `install.sh` | `~/.local/lib/ai-meterix` | `~/.local/bin/aimeterix` | `rm -rf ~/.local/lib/ai-meterix ~/.local/bin/aimeterix`, and the PATH line it added to the shell profile |
 
-`aimeterix uninstall` prints the right line; it reads `INSTALLED_BY` in the program folder. Settings and data are per user, in the folders `aimeterix paths` prints (record 0019), and are created by `aimeterix init`, never by an installer: an installer runs as root and must not write into a user's home.
+`aimeterix uninstall` prints the right line; it reads `INSTALLED_BY` in the program folder. Settings and data are per user, in the folders `aimeterix paths` prints (record 0019), and are created by the first `aimeterix start` (or `aimeterix init`) as that user, never by the `.pkg`: an installer runs as root and must not write into a user's home.
 
 ## Not done yet
 

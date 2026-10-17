@@ -102,7 +102,7 @@ Measures what local and cloud AI costs on this machine: energy, tokens and money
 Installed in   {where}
 Command        aimeterix   (aimeterix --help lists everything)
 
-Default settings, shown again by `aimeterix init`, where you can change them:
+Default settings; the first `aimeterix start` uses them, `aimeterix init` changes them first:
   Proxy          http://127.0.0.1:8787   apps send their AI calls here
   Dashboard      http://127.0.0.1:8788   accounts user and admin
   Database       SQLite in the data folder
@@ -116,9 +116,8 @@ Files (`aimeterix paths` shows them):
   Linux   ~/.config/aimeterix, ~/.local/share/aimeterix, ~/.local/state/aimeterix
 
 Next:
-  1. aimeterix init     review the settings, change any, create the database
-  2. aimeterix start    run the agent, proxy and dashboard in the background
-  3. aimeterix health   check everything is measuring
+  aimeterix start      run the agent, proxy and dashboard; the first start sets up the defaults
+  aimeterix health     check everything is measuring
 
 Hardware energy readings need Apple Silicon for now; on Intel Macs and Linux the
 proxy and dashboard work, and token costs are counted.

@@ -80,9 +80,13 @@ def test_health_names_what_is_missing(home: Paths, capsys: pytest.CaptureFixture
 
 
 def test_start_and_stop_commands(home: Paths, capsys: pytest.CaptureFixture[str]) -> None:
-    assert main(["start", "serve"]) == 0
+    assert not home.config_file.exists()
+    assert main(["start", "serve"]) == 0  # no `init` needed: the first start sets up
     out = capsys.readouterr().out
     assert "serve  started" in out and "aimeterix health" in out
+    assert "First start" in out and home.config_file.is_file()
+    assert main(["start", "serve"]) == 0
+    assert "First start" not in capsys.readouterr().out
     assert main(["health"]) == 1  # agent and proxy are not running
     assert "serve  running" in capsys.readouterr().out
     assert main(["stop"]) == 0

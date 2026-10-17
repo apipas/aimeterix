@@ -8,27 +8,28 @@ AI Meterix meters the AI work on your machine: the energy the chip uses, the tok
 
 ## Install
 
-Each [release](https://github.com/mabuthraa/gocompute/releases/latest) has a macOS installer that carries its own Python, so nothing else is needed. Pick the one for your Mac's processor (Apple menu > About This Mac shows "Apple M…" or "Intel"):
-
-| Mac | Download | Installs to |
-|---|---|---|
-| Apple Silicon (M1 and later) | `ai-meterix-<version>-macos-arm64.pkg` | `/usr/local/ai-meterix` |
-| Intel | `ai-meterix-<version>-macos-x86_64.pkg` | `/usr/local/ai-meterix` |
-| Either, without an admin password | `ai-meterix-<version>-macos-<processor>.tar.gz`, then `./install.sh` | `~/.local` |
-
-The installer shows the default settings first and, when it is done, the commands, the dashboard address and where the manual is. It asks for your password once, to install; AI Meterix itself never runs as root. It is not signed yet: if macOS says the developer cannot be verified, open System Settings > Privacy & Security and choose Open Anyway.
-
-Or in one line, for this user only: `curl -fsSL https://github.com/mabuthraa/gocompute/releases/latest/download/install.sh | sh`
-
-On Linux, or with Python 3.10 or newer anywhere, install the Python package (Linux installers are coming soon):
+On a Mac (Apple Silicon or Intel), in Terminal:
 
 ```bash
-pip install ai-meterix                 # or: uv tool install ai-meterix
-pip install "ai-meterix[postgres]"     # to store data in PostgreSQL
-pip install "ai-meterix[duckdb]"       # to store data in DuckDB
+curl -fsSL https://github.com/mabuthraa/gocompute/releases/latest/download/install.sh | sh
 ```
 
-Until the package is on PyPI: `pip install git+https://github.com/mabuthraa/gocompute.git`.
+That one line downloads the [latest release](https://github.com/mabuthraa/gocompute/releases/latest) for your Mac's processor from GitHub, checks its SHA-256, installs it with its own Python in `~/.local` (no admin password), adds `aimeterix` to your PATH and starts it. When it is done, it prints the dashboard address. Set `AIMETERIX_NO_START=1` to only install, or `AIMETERIX_NO_MODIFY_PATH=1` to leave your shell profile alone.
+
+### From source
+
+With [uv](https://docs.astral.sh/uv/) and Python 3.10 or newer, on macOS or Linux:
+
+```bash
+git clone https://github.com/mabuthraa/gocompute.git && cd gocompute
+uv run aimeterix start
+```
+
+Or install the command from the repository: `uv tool install git+https://github.com/mabuthraa/gocompute.git` (or `pip install git+https://github.com/mabuthraa/gocompute.git`). Add `[postgres]` or `[duckdb]` to store data in PostgreSQL or DuckDB.
+
+### Other ways
+
+Each release also has a `.pkg` installer per processor (`ai-meterix-<version>-macos-arm64.pkg` or `-x86_64.pkg`, installs to `/usr/local/ai-meterix`, asks for your password once) and the same files as a `.tar.gz` with `./install.sh`. The `.pkg` is not signed yet: if macOS says the developer cannot be verified, open System Settings > Privacy & Security and choose Open Anyway. Linux installers are coming soon.
 
 ## Coming soon
 
@@ -39,10 +40,11 @@ Until the package is on PyPI: `pip install git+https://github.com/mabuthraa/goco
 ## Quick start
 
 ```bash
-aimeterix init       # shows the default settings, lets you change any, creates the database
 aimeterix start      # runs the agent, proxy and dashboard in the background
 aimeterix health     # is everything measuring? (exit code 0 when healthy)
 ```
+
+The installer already ran `aimeterix start`. The first start sets up the default settings (proxy on port 8787, dashboard on 8788, SQLite). To choose others first, run `aimeterix init` before the first start; later, edit the file `aimeterix paths` shows, or use `aimeterix config`.
 
 Then:
 
@@ -83,7 +85,7 @@ Every command finds the same files, whatever folder you run it in:
 | Database (`meter.db`), buffers | `~/Library/Application Support/aimeterix` | `~/.local/share/aimeterix` |
 | Logs | `~/Library/Logs/aimeterix` | `~/.local/state/aimeterix/logs` |
 
-Set `AIMETERIX_HOME` to keep everything in one folder instead. Data goes to SQLite by default; PostgreSQL and DuckDB work too. Settings live in the database after `init`; change them with `aimeterix config`, `aimeterix providers` and `aimeterix prices`, or the admin API.
+Set `AIMETERIX_HOME` to keep everything in one folder instead. Data goes to SQLite by default; PostgreSQL and DuckDB work too. Settings live in the database after the first start; change them with `aimeterix config`, `aimeterix providers` and `aimeterix prices`, or the admin API.
 
 ## Privacy and security
 

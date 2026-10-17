@@ -15,11 +15,8 @@
 <body>
 <h1>AI Meterix @VERSION@ is installed</h1>
 <p>Open <b>Terminal</b> and run:</p>
-<ol>
-  <li><code>aimeterix init</code>: shows the settings, lets you change any, creates the database</li>
-  <li><code>aimeterix start</code>: runs the agent, proxy and dashboard in the background</li>
-  <li><code>aimeterix health</code>: checks that everything is measuring</li>
-</ol>
+<p><code>aimeterix start</code></p>
+<p>It runs the agent, proxy and dashboard in the background. The first start sets up the default settings. To change them first, run <code>aimeterix init</code> before it. <code>aimeterix health</code> checks that everything is measuring.</p>
 
 <h2>Addresses</h2>
 <table>
@@ -27,7 +24,7 @@
   <tr><td>Accounts</td><td><code>user</code> to read; <code>admin</code> to change settings. The first password is the account name; you choose a new one at first login.</td></tr>
   <tr><td>Proxy for your apps</td><td><code>http://127.0.0.1:8787/openai/v1</code> and one address per provider: <code>aimeterix providers</code></td></tr>
 </table>
-<p class="muted">These are the defaults; <code>aimeterix init</code> may have changed them.</p>
+<p class="muted">These are the defaults; <code>aimeterix paths</code> shows the settings file.</p>
 
 <h2>Manual</h2>
 <table>
