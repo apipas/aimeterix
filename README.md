@@ -189,7 +189,7 @@ The full manual is also in the dashboard: http://127.0.0.1:8788/#help
 
 ## 📦 Versions
 
-- **0.1.2 (preview):**
+- **0.1.3 (preview):**
   - Energy metering on Apple Silicon Macs
   - Token counting for 10 cloud providers and local models
   - Daily costs and a local dashboard
