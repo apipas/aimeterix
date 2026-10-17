@@ -30,7 +30,7 @@ from pathlib import Path
 PYTHON = "3.12.13"
 HERE = Path(__file__).resolve().parent
 APP_ID = "com.apipas.aimeterix"
-HOMEPAGE = "https://github.com/apipas-com/aimeterix"
+HOMEPAGE = "https://github.com/apipas/aimeterix"
 # Shipped in the program folder as the offline manual (macOS .pkg).
 DOCS = ("README.md", "CHANGELOG.md", "SECURITY.md", "LICENSE", "docs/FAQ.md")
 # Never needed at run time; leaving them out saves about a third of the size.
