@@ -1,3 +1,3 @@
 """AI Meterix: meter AI compute usage, price it, advise and forecast."""
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
