@@ -1,8 +1,8 @@
 # Changelog
 
-## 0.1.1 (preview)
+## 0.1.2 (preview)
 
-First published preview: metering, costs and a dashboard on one machine.
+Preview: metering, costs and a dashboard on one machine.
 
 - **Install in one line** on macOS, Apple Silicon or Intel, without an admin password: `install.sh` downloads the release for your processor from GitHub, checks its SHA-256, installs it with its own Python and starts it. A `.pkg` installer (not signed yet) and building from source work too. The Python package works on Linux too.
 - **Setup:** the first `aimeterix start` sets itself up with the default settings. `aimeterix init` is optional: it shows the defaults and lets you change any before the first start. `aimeterix start`, `stop` and `health` run and check the agent, proxy and API; `aimeterix uninstall --purge` removes the data.
@@ -13,6 +13,7 @@ First published preview: metering, costs and a dashboard on one machine.
 - **Storage:** SQLite (default), PostgreSQL or DuckDB, behind one connector interface.
 - **API and dashboard:** a localhost API with `user` and `admin` accounts, and a read-only dashboard at http://127.0.0.1:8788/ with a built-in Help page.
 - **Settings:** live settings and providers in the database, reloaded within a minute, every change logged.
+- **New home:** the project moved to https://github.com/apipas/aimeterix; the one-line install, the packages and the links point there.
 - **Fixes since the v0.1.0 tag:** `aimeterix start` and `stop` with no service name work on Python 3.10 and 3.11; the proxy no longer reuses a connection the provider already closed, which could return a 502; usage lists sort the same on PostgreSQL as on SQLite; the services start faster on macOS.
 
 ### Coming soon
@@ -20,6 +21,10 @@ First published preview: metering, costs and a dashboard on one machine.
 - Linux and Windows: installers and hardware metering
 - Advisor and forecast: what to change to save money, and next month's cost
 - General improvements: NVIDIA GPUs, starting at login, several machines on one dashboard
+
+## 0.1.1
+
+Published on the old repository (apipas-com/aimeterix); replaced by 0.1.2.
 
 ## 0.1.0
 

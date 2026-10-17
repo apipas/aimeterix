@@ -13,7 +13,7 @@ We're excited to ship this small tool to help **developers, indie makers and sma
 For macOS on Apple Silicon or Intel. No admin password needed.
 
 ```bash
-curl -fsSL https://github.com/apipas-com/aimeterix/releases/latest/download/install.sh | sh
+curl -fsSL https://github.com/apipas/aimeterix/releases/latest/download/install.sh | sh
 ```
 
 - ✅ Downloads the right build for your Mac from GitHub
@@ -24,7 +24,7 @@ curl -fsSL https://github.com/apipas-com/aimeterix/releases/latest/download/inst
 
 ### Installer package
 
-1. Download the `.pkg` for your Mac from the [releases page](https://github.com/apipas-com/aimeterix/releases/latest):
+1. Download the `.pkg` for your Mac from the [releases page](https://github.com/apipas/aimeterix/releases/latest):
    - Apple Silicon (M1 and later): `ai-meterix-<version>-macos-arm64.pkg`
    - Intel: `ai-meterix-<version>-macos-x86_64.pkg`
 2. Double-click it and follow the steps.
@@ -41,7 +41,7 @@ aimeterix start
 Needs [uv](https://docs.astral.sh/uv/).
 
 ```bash
-git clone https://github.com/apipas-com/aimeterix.git
+git clone https://github.com/apipas/aimeterix.git
 ```
 
 ```bash
@@ -189,7 +189,7 @@ The full manual is also in the dashboard: http://127.0.0.1:8788/#help
 
 ## 📦 Versions
 
-- **0.1.1 (preview):**
+- **0.1.2 (preview):**
   - Energy metering on Apple Silicon Macs
   - Token counting for 10 cloud providers and local models
   - Daily costs and a local dashboard
