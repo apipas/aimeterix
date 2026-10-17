@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Meterix</title>
+<meta name="description" content="See what AI really costs on your Mac: energy, tokens and money, in one local dashboard.">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%234ade80'/%3E%3Ctext x='16' y='22' font-size='16' font-family='monospace' font-weight='700' text-anchor='middle' fill='%2304110a'%3EAM%3C/text%3E%3C/svg%3E">
+</head>
+<body>
+<header class="top"><div class="wrap">
+<a class="logo" href="index.html"><span class="mark">AM</span>AI Meterix</a>
+<button class="menu-btn" type="button" aria-label="Menu">Menu</button>
+<nav class="menu"><a href="index.html" aria-current="page">Home</a><a href="install.html">Install</a><a href="docs.html">Docs</a><a href="releases.html">Releases</a><a href="about.html">About</a><a href="https://github.com/apipas-com/aimeterix">GitHub ↗</a></nav>
+</div></header>
+<main>
+
+<section class="hero"><div class="wrap">
+<span class="badge"><span class="dot"></span>v0.1.0 preview · open source · macOS</span>
+<h1>Know what your AI<br><span class="grad">really costs.</span></h1>
+<p class="lead">AI Meterix measures the energy your Mac spends on AI, counts every token each model uses, and turns both into a clear daily cost. All on your machine.</p>
+<div class="btns"><a class="btn primary" href="install.html">Install</a><a class="btn" href="https://github.com/apipas-com/aimeterix">View on GitHub ↗</a></div>
+<div class="term"><div class="bar"><i></i><i></i><i></i></div><pre><span class="p">$ </span>curl -fsSL https://github.com/apipas-com/aimeterix/releases/latest/download/install.sh | sh</pre></div>
+<div class="shot"><img src="images/dashboard.png" alt="The AI Meterix dashboard: cost, energy, tokens and calls for the last 7 days" width="1280" height="900"></div>
+</div></section>
+
+<section class="section"><div class="wrap">
+<h2>Built for people who ship with AI</h2>
+<p class="sub">Developers, indie makers and small teams who run local models or pay for cloud AI APIs.</p>
+<div class="grid">
+<div class="card"><div class="ico">⚡</div><h3>Energy</h3><p>Reads your chip's power every 10 seconds and splits it by app and by local model (llama.cpp, Ollama).</p></div>
+<div class="card"><div class="ico">🔢</div><h3>Tokens</h3><p>A local proxy counts input, output and cache tokens of every call, streaming included. Ten cloud providers built in.</p></div>
+<div class="card"><div class="ico">💶</div><h3>Cost</h3><p>Turns energy and tokens into one daily cost with your electricity rate and dated public token prices.</p></div>
+</div>
+</div></section>
+
+<section class="section"><div class="wrap">
+<h2>How it works</h2>
+<p class="sub">Three small services on your Mac. Your apps keep their own API keys.</p>
+<div class="flow">
+<div class="stack"><div class="node"><b>Your apps</b><span>AI calls</span></div><div class="node"><b>Mac chip</b><span>CPU, GPU, power</span></div></div>
+<div class="arrow">→</div>
+<div class="stack"><div class="node hl"><b>proxy</b><span>127.0.0.1:8787</span></div><div class="node hl"><b>agent</b><span>every 10 s</span></div></div>
+<div class="arrow">→</div>
+<div class="stack"><div class="node"><b>Database</b><span>on your Mac</span></div><div class="node hl"><b>Dashboard</b><span>127.0.0.1:8788</span></div></div>
+</div>
+<p style="margin-top:24px"><a href="docs.html">Read the docs →</a></p>
+</div></section>
+
+<section class="section"><div class="wrap">
+<div class="grid two">
+<div><h2>Private by design</h2><p class="sub">Your data stays on your Mac.</p></div>
+<ul class="ticks">
+<li><b>Kept:</b> model names, token counts, timings, energy</li>
+<li class="no"><b>Never kept:</b> prompts, answers, API keys</li>
+<li><b>Local only:</b> everything listens on 127.0.0.1</li>
+<li><b>No account,</b> no telemetry, no update check</li>
+</ul>
+</div>
+</div></section>
+
+</main>
+<footer><div class="wrap">
+<div>© 2026 Apipas s.r.o., Prague, Czechia · IČO 03457567 · VAT CZ03457567<br>AI Meterix is open source under the Apache-2.0 license.</div>
+<div class="links"><a href="mailto:info@apipas.com">info@apipas.com</a><a href="privacy.html">Privacy</a><a href="https://github.com/apipas-com/aimeterix">GitHub</a><a href="https://github.com/apipas-com/aimeterix/blob/main/LICENSE">License</a></div>
+</div></footer>
+<script src="site.js"></script>
+</body>
+</html>
