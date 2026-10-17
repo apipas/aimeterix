@@ -11,7 +11,7 @@ A release is one tag. GitHub Actions (`.github/workflows/release.yml`) builds th
 
 `uv.lock` is committed on purpose: CI and every developer install the same dependency versions.
 
-Versions starting with `0.` are published as pre-releases.
+Every release is published as the latest release, so the one-line install (`releases/latest/download/install.sh`) finds it. A `0.x` version is still a preview.
 
 ## What a release contains
 
