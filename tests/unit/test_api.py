@@ -5,6 +5,7 @@ from __future__ import annotations
 import http.client
 import json
 import re
+import socket
 import threading
 from collections.abc import Iterator
 from datetime import datetime, timezone
@@ -183,7 +184,11 @@ def test_serve_and_password_commands(
     from ai_meterix.interfaces.cli import main
 
     url = f"sqlite:///{tmp_path / 'm.db'}"
-    assert main(["serve", "--url", url, "--port", "0", "--for", "0.2s"]) == 0
+    with socket.socket() as taken:  # --port 0 must not fall back to the configured port
+        taken.bind(("127.0.0.1", 0))
+        taken.listen()
+        monkeypatch.setenv("AIMETERIX_API_PORT", str(taken.getsockname()[1]))
+        assert main(["serve", "--url", url, "--port", "0", "--for", "0.2s"]) == 0
     answers = iter(["new-admin-pass", "new-admin-pass", "short", "short", "a-long-one", "other"])
     monkeypatch.setattr("getpass.getpass", lambda prompt="": next(answers))
     assert main(["password", "admin", "--url", url]) == 0

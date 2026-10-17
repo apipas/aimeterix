@@ -9,4 +9,3 @@ Every settled decision gets a short record in `docs/decisions/`, numbered in ord
 
 ## Consequences
 - New contributors can see why things are the way they are.
-- `docs/PLAN.md` links to these records instead of repeating them.

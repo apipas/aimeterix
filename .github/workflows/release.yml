@@ -1,0 +1,98 @@
+name: Release
+
+# Pushing a tag such as v0.1.0 builds the macOS packages, installs each one on a
+# clean Mac of its CPU, then publishes a GitHub Release. Linux packages can be
+# built with packaging/build.py but are not released yet.
+# A push to a release/* branch, or "Run workflow" by hand, builds and tests
+# without publishing (docs/RELEASING.md).
+
+on:
+  push:
+    tags: ["v*"]
+    branches: ["release/**"]  # builds and tests the packages; only a tag publishes
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: The tag matches the package version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: test "v$(uv version --short)" = "$GITHUB_REF_NAME"
+      - run: uv build
+      - run: python3 packaging/build.py dist/*.whl --target macos-arm64 --target macos-x86_64 --pkg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: dist/*
+
+  test:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-15, kind: pkg, file: ai-meterix-*-macos-arm64.pkg }
+          - { os: macos-15-intel, kind: pkg, file: ai-meterix-*-macos-x86_64.pkg }
+          - { os: macos-15, kind: tar, file: ai-meterix-*-macos-arm64.tar.gz }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: packages
+          path: dist
+      - name: Install from the ${{ matrix.kind }} package
+        shell: bash
+        run: |
+          file=$(ls dist/${{ matrix.file }})
+          case ${{ matrix.kind }} in
+            pkg) sudo installer -pkg "$file" -target / ;;
+            tar) tar -xzf "$file" -C "$RUNNER_TEMP"
+                 # The script also starts it; the agent may not run on a CI Mac.
+                 AIMETERIX_NO_START=1 sh "$RUNNER_TEMP/$(basename "$file" .tar.gz)/install.sh"
+                 echo "$HOME/.local/bin" >> "$GITHUB_PATH" ;;
+          esac
+      - name: Set up, run, check and remove, from an unrelated folder
+        shell: bash
+        run: |
+          set -x
+          mkdir "$RUNNER_TEMP/work" && cd "$RUNNER_TEMP/work"
+          aimeterix --version
+          aimeterix start proxy serve  # the first start sets up the defaults
+          aimeterix paths
+          sleep 3
+          curl -fsS http://127.0.0.1:8788/ > /dev/null
+          aimeterix stop
+          aimeterix uninstall --purge --yes
+          test -z "$(ls -A)"  # nothing written where the command ran
+
+  release:
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: packages
+          path: dist
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          cp packaging/install.sh dist/
+          echo "$version" > dist/VERSION
+          (cd dist && sha256sum ai-meterix* ai_meterix* install.sh > SHA256SUMS)
+          awk -v v="## $version" 'index($0, v) == 1 {on = 1; next} /^## / {on = 0} on' \
+            CHANGELOG.md > notes.md
+          case $version in 0.*) pre=--prerelease ;; *) pre= ;; esac
+          gh release create "$GITHUB_REF_NAME" dist/* --title "AI Meterix $version" \
+            --notes-file notes.md $pre

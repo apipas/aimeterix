@@ -1,4 +1,4 @@
-"""Shared storage contract (PLAN.md Phase 1 step 4; records 0010, 0012, 0013, 0014)."""
+"""Shared storage contract (records 0010, 0012, 0013, 0014)."""
 
 from __future__ import annotations
 

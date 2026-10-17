@@ -1,6 +1,7 @@
 """Configuration loader (records 0006 and 0013).
 
-``aimeterix.yaml`` is the starting point and is safe to commit. Any setting can
+``aimeterix.yaml`` is the starting point and is safe to commit; it lives in the
+config folder (``core/paths.py``, record 0019), wherever the command is run. Any setting can
 be overridden by an environment variable named ``AIMETERIX_<SECTION>_<FIELD>``,
 e.g. ``AIMETERIX_STORAGE_URL`` or ``AIMETERIX_AGENT_INTERVAL_S``. Secrets come
 only from the environment or a never-committed ``.env`` file next to the YAML
@@ -25,11 +26,10 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic import ValidationError as PydanticValidationError
 
 from .errors import ConfigError
+from .paths import paths
 
 ENV_PREFIX = "AIMETERIX_"
 CONFIG_ENV = "AIMETERIX_CONFIG"
-DEFAULT_CONFIG_FILE = "aimeterix.yaml"
-DEFAULT_STORAGE_URL = "sqlite:///~/.aimeterix/meter.db"
 _ROUTE_NAME = re.compile(r"[a-z0-9][a-z0-9_-]*")
 _KEY_HASH = re.compile(r"[0-9a-f]{64}")
 
@@ -39,7 +39,7 @@ class _Section(BaseModel):
 
 
 class StorageConfig(_Section):
-    url: str = DEFAULT_STORAGE_URL
+    url: str = Field(default_factory=lambda: paths().storage_url)
     raw_retention_days: int = Field(default=30, ge=1)
     rollup_retention_days: int = Field(default=365, ge=1)
     busy_timeout_ms: int = Field(default=5000, ge=0)
@@ -118,12 +118,12 @@ def load_config(
     """Load configuration from YAML, then ``.env``, then the environment.
 
     Later sources win. ``path`` defaults to ``$AIMETERIX_CONFIG`` or
-    ``./aimeterix.yaml``; a missing default file means built-in defaults, while a
-    missing explicit file is an error.
+    ``aimeterix.yaml`` in the config folder; a missing default file means built-in
+    defaults, while a missing explicit file is an error.
     """
     environ = dict(os.environ if env is None else env)
     explicit = path is not None or CONFIG_ENV in environ
-    config_path = Path(path or environ.get(CONFIG_ENV) or DEFAULT_CONFIG_FILE).expanduser()
+    config_path = config_file(path, environ)
 
     data: dict[str, Any] = {}
     if config_path.is_file():
@@ -132,6 +132,9 @@ def load_config(
     elif explicit:
         raise ConfigError(f"config file not found: {config_path}")
 
+    storage = data.setdefault("storage", {})
+    if isinstance(storage, dict):
+        storage.setdefault("url", paths(environ).storage_url)
     dotenv = read_dotenv(config_path.parent / ".env")
     overrides = _env_overrides({**dotenv, **environ})
     for section, values in overrides.items():
@@ -144,6 +147,15 @@ def load_config(
         return Config.model_validate(data)
     except PydanticValidationError as exc:
         raise ConfigError(_describe(exc)) from None
+
+
+def config_file(
+    path: str | os.PathLike[str] | None = None, env: Mapping[str, str] | None = None
+) -> Path:
+    """The config file a command uses: ``path``, ``$AIMETERIX_CONFIG`` or the default."""
+    environ = os.environ if env is None else env
+    chosen = path or environ.get(CONFIG_ENV)
+    return Path(chosen).expanduser() if chosen else paths(environ).config_file
 
 
 def read_dotenv(path: Path) -> dict[str, str]:

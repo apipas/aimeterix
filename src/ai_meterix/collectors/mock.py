@@ -1,4 +1,4 @@
-"""A mock hardware backend for demos and tests on any machine (PLAN.md Phase 2 step 1d).
+"""A mock hardware backend for demos and tests on any machine.
 
 It invents a small Mac-like host: CPU, GPU and Neural Engine, one unified
 memory pool, and a local model server that is busy now and then. Every row is

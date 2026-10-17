@@ -16,6 +16,8 @@ from typing import TYPE_CHECKING
 from ai_meterix import __version__
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from ai_meterix.core.config import Config
     from ai_meterix.core.model import Provider
     from ai_meterix.core.settings import SettingsWatcher
@@ -198,7 +200,7 @@ def _proxy(args: argparse.Namespace) -> int:
         }
         if args.upstream:
             settings["default_upstream"] = args.upstream
-        if args.port:
+        if args.port is not None:  # 0 means any free port
             settings["port"] = args.port
         proxy_config = ProxyConfig.model_validate(settings)
     except (ConfigError, ValueError) as exc:
@@ -520,7 +522,7 @@ def _serve(args: argparse.Namespace) -> int:
     config = load_config(args.config)
     url = args.url or config.storage.url
     host = args.host or config.api.host
-    port = args.port or config.api.port
+    port = config.api.port if args.port is None else args.port  # 0: any free port
     try:
         storage = open_writer(url)
         try:
@@ -675,6 +677,201 @@ def _providers(args: argparse.Namespace) -> int:
         storage.close()
 
 
+def _confirm(question: str) -> bool:
+    try:
+        return input(f"{question} [y/N] ").strip().lower() in ("y", "yes")
+    except EOFError:  # no terminal: never assume yes
+        return False
+
+
+def _init(args: argparse.Namespace) -> int:
+    from ai_meterix.core.config import config_file, load_config
+    from ai_meterix.core.errors import AiMeterixError
+    from ai_meterix.core.settings import seed_settings
+    from ai_meterix.storage import open_writer
+
+    from .auth import ensure_accounts
+    from .setup import legacy_home, safe_url, summary, write_starter
+
+    path = config_file(args.config)
+    old = legacy_home()
+    if old is not None:
+        print(
+            f"Note: {old} is from a build before 0.1.0 and is no longer used. "
+            "Delete it when you no longer need its data."
+        )
+    if not path.is_file():
+        try:
+            write_starter(path)
+        except OSError as exc:
+            print(f"aimeterix init: cannot write {path}: {exc}", file=sys.stderr)
+            return 1
+        print(f"Wrote the config file {path} with the default settings.")
+        print()
+    try:
+        config = load_config(path)
+    except AiMeterixError as exc:
+        print(f"aimeterix init: {exc}", file=sys.stderr)
+        return 2
+    print("AI Meterix will set up:")
+    for line in summary(config, path.resolve()):
+        print(f"  {line}")
+    print()
+    if not args.yes and _confirm("Change any of these first?"):
+        changed = _edit_config(path, config)
+        if changed is None:
+            return 2
+        config = changed
+        print()
+        print("AI Meterix will set up:")
+        for line in summary(config, path.resolve()):
+            print(f"  {line}")
+        print()
+    if not args.yes and not _confirm("Create the database?"):
+        print("Nothing changed.")
+        return 1
+    try:
+        storage = open_writer(config.storage.url)
+    except AiMeterixError as exc:
+        print(f"aimeterix init: {exc}", file=sys.stderr)
+        return 1
+    try:
+        version = storage.schema_version()
+        if version is not None:
+            print(
+                f"aimeterix init: {safe_url(config.storage.url)} is already set up "
+                f"(schema v{version}). Change settings with `aimeterix config` and "
+                "`aimeterix providers`; to start again from nothing, run "
+                "`aimeterix uninstall --purge` first.",
+                file=sys.stderr,
+            )
+            return 1
+        storage.migrate()
+        ensure_accounts(storage)
+        seed_settings(storage, config)
+    finally:
+        storage.close()
+    print("Database created, with the accounts user and admin and the built-in providers.")
+    print()
+    try:
+        from ai_meterix.collectors.probe import probe
+
+        from .doctor import render
+
+        print(render(probe()))
+    except Exception as exc:  # the database is ready either way
+        print(f"(could not check this machine: {exc}; run `aimeterix doctor`)")
+    proxy, api = config.proxy, config.api
+    print()
+    print("Next:")
+    print("  1. aimeterix start        run the agent, proxy and dashboard in the background")
+    print("  2. aimeterix health       check everything is measuring")
+    print(f"  3. open http://{api.host}:{api.port}/ and log in as user (password: user);")
+    print(f"     the manual is at http://{api.host}:{api.port}/#help")
+    print("  4. aimeterix profile set --rate 0.30   your electricity price per kWh (after start)")
+    print(f"  5. point your apps at the proxy, e.g. http://{proxy.host}:{proxy.port}/openai/v1;")
+    print("     `aimeterix providers` lists the address for each provider")
+    return 0
+
+
+def _ask(question: str, current: str) -> str:
+    try:
+        answer = input(f"  {question} [{current or 'none'}]: ").strip()
+    except EOFError:
+        return current
+    return answer or current
+
+
+def _edit_config(path: Path, config: Config) -> Config | None:
+    """Ask for each main value (Enter keeps it), then write the file and check it."""
+    from ai_meterix.core.config import load_config
+    from ai_meterix.core.errors import AiMeterixError
+
+    from .setup import CHOICES, set_value
+
+    print("Press Enter to keep a value.")
+    before = path.read_text(encoding="utf-8")
+    text = before
+    for choice in CHOICES:
+        current = choice.current(config)
+        answer = _ask(choice.question, current)
+        if answer != current:
+            text = set_value(text, choice.section, choice.key, answer)
+    if text == before:
+        return config
+    path.write_text(text, encoding="utf-8")
+    try:
+        new = load_config(path)
+    except AiMeterixError as exc:
+        path.write_text(before, encoding="utf-8")
+        print(f"aimeterix init: {exc}; the file was left as it was.", file=sys.stderr)
+        return None
+    print(f"Saved in {path}.")
+    return new
+
+
+def _uninstall(args: argparse.Namespace) -> int:
+    from ai_meterix.core.config import load_config
+    from ai_meterix.core.errors import AiMeterixError
+    from ai_meterix.core.paths import paths
+
+    from .service import SERVICES, stop
+    from .setup import legacy_home, purge, removal_hint, sqlite_path
+
+    ok = True
+    for name, stopped, message in stop(SERVICES):
+        print(f"{name:<6} {message}")
+        ok = ok and stopped
+    if not ok:
+        print("aimeterix uninstall: something is still running; nothing deleted", file=sys.stderr)
+        return 1
+    folders = paths().folders()
+    outside = None
+    try:
+        db = sqlite_path(load_config(args.config).storage.url)
+        if db is not None and not any(db.resolve().is_relative_to(f.resolve()) for f in folders):
+            outside = db
+    except AiMeterixError:
+        pass
+    if args.purge:
+        print("This deletes for good the config, database, logs and buffers in:")
+        for folder in folders:
+            print(f"  {folder}")
+        if not args.yes and not _confirm("Delete them?"):
+            print("Nothing deleted.")
+            return 1
+        try:
+            deleted = purge()
+        except (OSError, ValueError) as exc:
+            print(f"aimeterix uninstall: {exc}", file=sys.stderr)
+            return 1
+        print("\n".join(f"Deleted {f}." for f in deleted) or "Nothing was there to delete.")
+    else:
+        print("Your config and data are kept; `aimeterix uninstall --purge` deletes them.")
+        print("`aimeterix paths` shows where they are.")
+    if outside is not None:
+        print(f"Your database {outside} is outside these folders and was not deleted.")
+    old = legacy_home()
+    if old is not None:
+        print(f"{old} is from a build before 0.1.0; delete it yourself if you no longer need it.")
+    print(f"To remove the program: {removal_hint()}")
+    return 0
+
+
+def _paths(args: argparse.Namespace) -> int:
+    from ai_meterix.core.config import config_file
+    from ai_meterix.core.paths import paths
+
+    from .setup import legacy_home, where_lines
+
+    for line in where_lines(paths(), config_file(args.config)):
+        print(line)
+    old = legacy_home()
+    if old is not None:
+        print(f"Old folder     {old}  (from a build before 0.1.0, no longer used)")
+    return 0
+
+
 def _config(args: argparse.Namespace) -> int:
     import getpass
 
@@ -768,11 +965,22 @@ def _config(args: argparse.Namespace) -> int:
 
 
 def _start(args: argparse.Namespace) -> int:
-    from ai_meterix.core.config import load_config
+    from ai_meterix.core.config import config_file, load_config
     from ai_meterix.core.errors import ConfigError
 
     from .service import SERVICES, start
+    from .setup import write_starter
 
+    # The first start sets itself up with the defaults; `init` is only for
+    # choosing settings before that. The processes create the database.
+    path = config_file(args.config)
+    first = not path.is_file()
+    if first:
+        try:
+            write_starter(path)
+        except OSError as exc:
+            print(f"aimeterix start: cannot write {path}: {exc}", file=sys.stderr)
+            return 1
     try:
         config = load_config(args.config)
     except ConfigError as exc:
@@ -783,10 +991,15 @@ def _start(args: argparse.Namespace) -> int:
     for name, started, message in start(names, config=args.config):
         print(f"{name:<6} {message}")
         ok = ok and started
-    if ok:
-        print(f"API and dashboard: http://{config.api.host}:{config.api.port}/api")
-        print(f"point apps at the proxy: http://{config.proxy.host}:{config.proxy.port}")
-        print("check with `aimeterix health`; stop with `aimeterix stop`")
+    api, proxy = config.api, config.proxy
+    print(f"Dashboard: http://{api.host}:{api.port}/  (log in as user, password user)")
+    print(f"Manual:    http://{api.host}:{api.port}/#help")
+    print(f"Proxy for your apps: http://{proxy.host}:{proxy.port}  (`aimeterix providers`)")
+    if first:
+        print(f"First start: the default settings are in {path}.")
+        print("Change ports or the database there, then `aimeterix stop` and `aimeterix start`;")
+        print("everything else with `aimeterix config`.")
+    print("Check with `aimeterix health`; stop with `aimeterix stop`.")
     return 0 if ok else 1
 
 
@@ -1018,14 +1231,55 @@ def build_parser() -> argparse.ArgumentParser:
     providers.add_argument("--config", help="path to aimeterix.yaml")
     providers.set_defaults(func=_providers)
 
+    init = commands.add_parser(
+        "init", help="optional, before the first start: review and change the default settings"
+    )
+    init.add_argument("--yes", action="store_true", help="do not ask for confirmation")
+    init.add_argument("--config", help="path to aimeterix.yaml (default: in the config folder)")
+    init.set_defaults(func=_init)
+
+    uninstall = commands.add_parser(
+        "uninstall", help="stop everything; --purge also deletes the data"
+    )
+    uninstall.add_argument(
+        "--purge", action="store_true", help="also delete the config, data and logs folders"
+    )
+    uninstall.add_argument("--yes", action="store_true", help="do not ask for confirmation")
+    uninstall.add_argument("--config", help="path to aimeterix.yaml")
+    uninstall.set_defaults(func=_uninstall)
+
+    where = commands.add_parser("paths", help="show where the config, data and logs are")
+    where.add_argument("--config", help="path to aimeterix.yaml")
+    where.set_defaults(func=_paths)
+
     names = ("agent", "proxy", "serve")
+
+    def service(text: str) -> str:
+        # Not `choices`: before Python 3.12, argparse checks an empty `nargs="*"` list
+        # against the choices and fails when no name is given.
+        if text not in names:
+            raise argparse.ArgumentTypeError(f"{text!r} is not one of {', '.join(names)}")
+        return text
+
     start = commands.add_parser("start", help="run the agent, proxy and API in the background")
-    start.add_argument("names", nargs="*", choices=names, help="only these (default all)")
+    start.add_argument(
+        "names",
+        nargs="*",
+        type=service,
+        metavar="{agent,proxy,serve}",
+        help="only these (default all)",
+    )
     start.add_argument("--config", help="path to aimeterix.yaml")
     start.set_defaults(func=_start)
 
     stop = commands.add_parser("stop", help="stop what `start` runs; buffers are written first")
-    stop.add_argument("names", nargs="*", choices=names, help="only these (default all)")
+    stop.add_argument(
+        "names",
+        nargs="*",
+        type=service,
+        metavar="{agent,proxy,serve}",
+        help="only these (default all)",
+    )
     stop.add_argument(
         "--keep-proxy", action="store_true", help="leave the proxy running for your apps"
     )

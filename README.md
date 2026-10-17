@@ -1,67 +1,214 @@
-# AI Meterix
+# 📊 AI Meterix
 
-**Know what your AI compute costs, what you waste, and what next month will cost.**
+**See what AI really costs on your Mac: energy, tokens and money, in one local dashboard.**
 
-AI Meterix is an open-source tool for teams running AI on their own GPUs, rented cloud GPUs and LLM APIs. It meters usage, prices it with *your* rates, tells you in plain language what to change, and forecasts next month with a range. Store the data in whatever you already use: SQLite, DuckDB, PostgreSQL, or your own connector.
+We're excited to ship this small tool to help **developers, indie makers and small teams who run local models (llama.cpp, Ollama) or pay for cloud AI APIs** to **measure the energy their Mac spends on AI, count every token each model uses, and turn both into a clear daily cost.**
 
-> **Status: early development.** Phases 1 and 2 are in progress: the data model, storage connectors (SQLite default, PostgreSQL, DuckDB), `aimeterix doctor`, the Apple Silicon agent, the LLM proxy and the cost engine (`usage`, `profile`, `prices`) the localhost API (`serve`) and live settings (`config`), `start` / `stop` / `health` and a read-only web dashboard exist. The advisor and forecast come next. Read the plan in [docs/PLAN.md](docs/PLAN.md).
+![The AI Meterix dashboard: cost, energy, tokens and calls for the last 7 days](docs/images/dashboard.png)
 
-## Try it
+## 🚀 Installation
+
+### One line (recommended)
+
+For macOS on Apple Silicon or Intel. No admin password needed.
 
 ```bash
-aimeterix doctor                 # what this machine can measure
-aimeterix agent                  # sample the hardware until Ctrl-C (--mock for a demo)
-aimeterix proxy --upstream http://127.0.0.1:8080   # meter a local llama.cpp server
-aimeterix profile set --rate 0.33 --fees 0   # your energy price and fees, in USD
-aimeterix usage                  # tokens, Wh and cost per model and day
-aimeterix prices                 # price per 1M tokens for each model
-aimeterix providers              # the AI providers apps can call through the proxy, local and cloud
-aimeterix prices apply-reference # copy the dated list of public prices (see `prices reference`)
-aimeterix serve                  # JSON API on http://127.0.0.1:8788/api with login
-aimeterix config                 # live settings; `config set agent.interval_s 5`
-aimeterix start                  # agent, proxy and API in the background (logs in ~/.aimeterix/logs)
-aimeterix health                 # is everything running and measuring now? (exit code 1 if not)
-aimeterix stop                   # stop them; buffers are written first (--keep-proxy keeps apps working)
+curl -fsSL https://github.com/apipas-com/aimeterix/releases/latest/download/install.sh | sh
 ```
 
-The first start of the agent, proxy or API copies the live settings (sampling interval, retention, default upstream and key allowlist) from `aimeterix.yaml` into the database. From then on the database wins: change them with `aimeterix config set KEY VALUE` or `PUT /api/config/<key>`, and the agent and proxy pick the change up within a minute, without a restart. `aimeterix config history` shows who changed what; `aimeterix config export FILE` writes the settings back to YAML. The database URL, addresses and ports, and secrets stay in the file or environment.
+- ✅ Downloads the right build for your Mac from GitHub
+- ✅ Checks its SHA-256
+- ✅ Installs it in `~/.local` with its own Python
+- ✅ Adds `aimeterix` to your PATH
+- ✅ Starts AI Meterix and prints the dashboard address
 
-Ten cloud providers are built in: OpenAI, Anthropic, Google Gemini, Mistral, Groq, Together AI, Fireworks AI, OpenRouter, DeepSeek and xAI. Point an app's base URL at the address `aimeterix providers` shows, e.g. `http://127.0.0.1:8787/groq/openai/v1`; its API key passes through and is never stored. Add any other provider or a local model server with `aimeterix providers add NAME --base-url URL`, and price its models with `aimeterix prices set MODEL --provider NAME`. A model with no price costs 0.
+### Installer package
 
-After `aimeterix start`, open the dashboard at http://127.0.0.1:8788/ (cost, energy, tokens and calls per day and per model, data coverage, health). It is read-only; change settings with `aimeterix config` or the API.
+1. Download the `.pkg` for your Mac from the [releases page](https://github.com/apipas-com/aimeterix/releases/latest):
+   - Apple Silicon (M1 and later): `ai-meterix-<version>-macos-arm64.pkg`
+   - Intel: `ai-meterix-<version>-macos-x86_64.pkg`
+2. Double-click it and follow the steps.
+3. Start AI Meterix in Terminal:
 
-`aimeterix serve` creates two accounts, `user` (read) and `admin` (read and write), whose first password is their name and must be changed at first login (`POST /api/password`, or `aimeterix password admin`). Log in with `POST /api/login`, then send `Authorization: Bearer <token>`. Endpoints are listed in `src/ai_meterix/interfaces/api.py`.
+```bash
+aimeterix start
+```
 
-Point your app at the proxy instead of the provider: `http://127.0.0.1:8787/openai/v1`, `http://127.0.0.1:8787/anthropic` or, with `--upstream`, `http://127.0.0.1:8787/v1`. Add `X-AIMeterix-App` and `X-AIMeterix-Feature` headers (or `/app/<name>/` in the path) to see who made each call. Only token counts, timings and tags are stored, never prompts, responses or keys.
+> ⚠️ The package is not signed yet. If macOS blocks it, open **System Settings > Privacy & Security** and choose **Open Anyway**.
 
-## What it will answer
+### From source
 
-| You ask | AI Meterix tells you |
-|---|---|
-| What did we spend? | One total across cloud GPUs, owned GPUs (with power) and LLM tokens |
-| What did we waste? | Idle GPU time priced in dollars, and when it happens |
-| What should we change? | Actions with an estimated saving |
-| What will next month cost? | A forecast with a likely range and a budget warning |
+Needs [uv](https://docs.astral.sh/uv/).
 
-## Principles
+```bash
+git clone https://github.com/apipas-com/aimeterix.git
+```
 
-- **Advice first.** Every report leads with actions, not charts.
-- **Bring your own database.** Storage is a pluggable connector.
-- **Local first and private.** No account, no telemetry, prompts never stored.
+```bash
+cd aimeterix
+```
 
-## Repository map
+```bash
+uv run aimeterix start
+```
 
-| Path | What lives there |
-|---|---|
-| `docs/PLAN.md` | The phased plan and open decisions |
-| `docs/decisions/` | One short record per settled decision |
-| `src/ai_meterix/` | The package; `core/` holds the data model, config and plugin registry |
-| `tests/` | Unit, connector conformance and integration tests |
-| `examples/` | Sample config (`aimeterix.example.yaml`); showcase data later |
-| `deploy/` | Docker and docker-compose |
+## ▶️ Get started
 
-## Contributing
+1. Open the dashboard at http://127.0.0.1:8788/
+   - Log in as `user`, password `user`
+   - You choose a new password the first time
+2. Set your electricity price per kWh:
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). License: [Apache-2.0](LICENSE). See [NOTICE](NOTICE) for attribution.
+```bash
+aimeterix profile set --rate 0.30
+```
 
-Decisions so far: [docs/decisions](docs/decisions/README.md).
+3. Point your apps at the proxy instead of the provider, for example `http://127.0.0.1:8787/openai/v1`. Your app keeps its own API key. To see the address for each provider:
+
+```bash
+aimeterix providers
+```
+
+4. Check that everything is measuring:
+
+```bash
+aimeterix health
+```
+
+## 🧭 How it works
+
+```mermaid
+flowchart LR
+    apps["Your apps"] -->|AI calls| proxy["proxy<br/>127.0.0.1:8787"]
+    proxy -->|forwarded unchanged| cloud["Cloud AI<br/>OpenAI, Anthropic, ..."]
+    proxy -->|forwarded unchanged| local["Local models<br/>llama.cpp, Ollama"]
+    chip["Mac chip<br/>CPU, GPU, power"] -->|every 10 s| agent["agent"]
+    proxy -->|model and token counts| db[("Database<br/>on your Mac")]
+    agent -->|energy per app and model| db
+    db --> serve["dashboard<br/>127.0.0.1:8788"]
+```
+
+- 🔀 **proxy:** your apps send their AI calls here. It forwards each call unchanged and notes the model and token counts.
+- ⚡ **agent:** every 10 seconds it reads the chip's power and which apps use it, so a local model's energy is measured.
+- 📈 **dashboard:** turns the counts into costs with your prices and electricity rate.
+
+## 💾 Where your data lives
+
+- 🗄️ **Database:** `~/Library/Application Support/aimeterix/meter.db` (SQLite; PostgreSQL and DuckDB work too)
+- ⚙️ **Settings:** `~/Library/Application Support/aimeterix/aimeterix.yaml`
+- 📝 **Logs:** `~/Library/Logs/aimeterix`
+- ✅ **Kept:** model names, token counts, timings, energy
+- 🚫 **Never kept:** prompts, answers, API keys
+- 🏠 **Nothing leaves your Mac** except your own calls to the provider you chose
+
+To print these folders:
+
+```bash
+aimeterix paths
+```
+
+## 🛠️ Commands
+
+### Run
+
+Start everything in the background (run it again after a restart of the Mac):
+
+```bash
+aimeterix start
+```
+
+Stop everything:
+
+```bash
+aimeterix stop
+```
+
+### Check
+
+Is everything running and measuring?
+
+```bash
+aimeterix health
+```
+
+Today's usage and costs in Terminal:
+
+```bash
+aimeterix usage
+```
+
+What this Mac can measure:
+
+```bash
+aimeterix doctor
+```
+
+### Costs and settings
+
+Your electricity price per kWh:
+
+```bash
+aimeterix profile set --rate 0.30
+```
+
+The AI providers and their proxy addresses:
+
+```bash
+aimeterix providers
+```
+
+Load public token prices:
+
+```bash
+aimeterix prices apply-reference
+```
+
+Change the default ports or database before the first start (optional):
+
+```bash
+aimeterix init
+```
+
+### Remove
+
+Stop and delete all settings and data:
+
+```bash
+aimeterix uninstall --purge
+```
+
+### Help
+
+Every command and option:
+
+```bash
+aimeterix --help
+```
+
+The full manual is also in the dashboard: http://127.0.0.1:8788/#help
+
+## 📦 Versions
+
+- **0.1.0 (preview):**
+  - Energy metering on Apple Silicon Macs
+  - Token counting for 10 cloud providers and local models
+  - Daily costs and a local dashboard
+
+All changes are in [CHANGELOG.md](CHANGELOG.md).
+
+### 🔮 Coming soon
+
+- 🐧 Linux and Windows support
+- 💡 Advice on what to change to save money
+- 📅 A monthly cost forecast
+- ✨ General improvements
+
+## 🔒 Security
+
+- Everything listens on 127.0.0.1 only
+- No account, no telemetry, no update check
+- To report a problem, see [SECURITY.md](SECURITY.md)
+
+## 📄 License
+
+[Apache-2.0](LICENSE). Want to help? See [CONTRIBUTING.md](CONTRIBUTING.md).
