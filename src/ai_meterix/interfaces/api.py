@@ -56,12 +56,12 @@ from datetime import date, datetime, timedelta, timezone, tzinfo
 from decimal import Decimal, InvalidOperation
 from enum import Enum
 from functools import cache
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler
 from importlib import resources
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlsplit
 
-from ai_meterix.collectors.proxy import is_loopback
+from ai_meterix.collectors.proxy import LoopbackHTTPServer, is_loopback
 from ai_meterix.core.config import Config
 from ai_meterix.core.errors import AiMeterixError
 from ai_meterix.core.model import CURRENCY, ModelPrice, PriceSource, Provider, Role
@@ -167,9 +167,7 @@ def _day(text: str | None, name: str) -> date | None:
         raise ApiError(400, f"{name} must be a date like 2026-10-13") from None
 
 
-class ApiServer(ThreadingHTTPServer):
-    daemon_threads = True
-
+class ApiServer(LoopbackHTTPServer):
     def __init__(
         self,
         address: tuple[str, int],
