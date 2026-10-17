@@ -34,6 +34,7 @@ import http.client
 import ipaddress
 import json
 import logging
+import socketserver
 import ssl
 import threading
 import time
@@ -407,9 +408,24 @@ class _Capture:
         return bytes(self.head) if not self.tail else bytes(self.head) + b"\n" + bytes(self.tail)
 
 
-class ProxyServer(ThreadingHTTPServer):
+class LoopbackHTTPServer(ThreadingHTTPServer):
+    """An HTTP server that starts listening at once.
+
+    ``HTTPServer.server_bind`` looks up the host's full name before it listens;
+    on some Macs that reverse DNS lookup takes seconds. On 127.0.0.1 the name
+    is not needed.
+    """
+
     daemon_threads = True
 
+    def server_bind(self) -> None:
+        socketserver.TCPServer.server_bind(self)
+        host, port = self.server_address[:2]
+        self.server_name = str(host)
+        self.server_port = int(port)
+
+
+class ProxyServer(LoopbackHTTPServer):
     def __init__(
         self,
         address: tuple[str, int],
@@ -529,6 +545,8 @@ class Upstreams:
         conn: http.client.HTTPConnection,
         response: http.client.HTTPResponse,
     ) -> None:
+        if response.length == 0:
+            response.close()  # fully read; Python 3.10's read1 leaves it open at the end
         if response.will_close or not response.isclosed():
             conn.close()
             return

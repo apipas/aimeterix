@@ -388,6 +388,13 @@ class SQLStorage:
             if q.bucket is not None:
                 values[0] = from_epoch_ms(int(values[0]))
             out.append(tuple(values))
+        # The databases sort text by their own collation (PostgreSQL by locale), so
+        # the order promised by build_query is applied here: NULL first, then by value.
+        out.sort(
+            key=lambda row: [
+                (v is not None, v if v is not None else 0) for v in row[:first_measure]
+            ]
+        )
         return Table(q.columns, tuple(out))
 
     def get_projects(self) -> list[Project]:

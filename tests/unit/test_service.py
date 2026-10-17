@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import shutil
 import socket
+import time
 from pathlib import Path
 
 import pytest
@@ -41,6 +42,9 @@ def test_start_runs_in_the_background_and_stop_leaves_nothing(home: Paths) -> No
     again = start(["proxy"], where=home)
     assert again[0][1] and "already running" in again[0][2]  # never a second copy
     proxy_port = int(__import__("os").environ["AIMETERIX_PROXY_PORT"])
+    deadline = time.monotonic() + 15  # a slow CI machine may take a while to listen
+    while not port_in_use("127.0.0.1", proxy_port) and time.monotonic() < deadline:
+        time.sleep(0.1)
     assert port_in_use("127.0.0.1", proxy_port)
 
     stopped = {name: (ok, msg) for name, ok, msg in stop(["proxy", "serve", "agent"], where=home)}

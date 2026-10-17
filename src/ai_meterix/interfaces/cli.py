@@ -1253,13 +1253,33 @@ def build_parser() -> argparse.ArgumentParser:
     where.set_defaults(func=_paths)
 
     names = ("agent", "proxy", "serve")
+
+    def service(text: str) -> str:
+        # Not `choices`: before Python 3.12, argparse checks an empty `nargs="*"` list
+        # against the choices and fails when no name is given.
+        if text not in names:
+            raise argparse.ArgumentTypeError(f"{text!r} is not one of {', '.join(names)}")
+        return text
+
     start = commands.add_parser("start", help="run the agent, proxy and API in the background")
-    start.add_argument("names", nargs="*", choices=names, help="only these (default all)")
+    start.add_argument(
+        "names",
+        nargs="*",
+        type=service,
+        metavar="{agent,proxy,serve}",
+        help="only these (default all)",
+    )
     start.add_argument("--config", help="path to aimeterix.yaml")
     start.set_defaults(func=_start)
 
     stop = commands.add_parser("stop", help="stop what `start` runs; buffers are written first")
-    stop.add_argument("names", nargs="*", choices=names, help="only these (default all)")
+    stop.add_argument(
+        "names",
+        nargs="*",
+        type=service,
+        metavar="{agent,proxy,serve}",
+        help="only these (default all)",
+    )
     stop.add_argument(
         "--keep-proxy", action="store_true", help="leave the proxy running for your apps"
     )
