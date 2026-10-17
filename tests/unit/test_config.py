@@ -2,8 +2,9 @@ from pathlib import Path
 
 import pytest
 
-from ai_meterix.core.config import DEFAULT_STORAGE_URL, load_config, read_dotenv
+from ai_meterix.core.config import load_config, read_dotenv
 from ai_meterix.core.errors import ConfigError
+from ai_meterix.core.paths import paths
 
 EXAMPLE = Path(__file__).parents[2] / "examples" / "aimeterix.example.yaml"
 
@@ -17,7 +18,7 @@ def write(tmp_path: Path, text: str, name: str = "aimeterix.yaml") -> Path:
 def test_defaults_without_a_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.chdir(tmp_path)
     config = load_config(env={})
-    assert config.storage.url == DEFAULT_STORAGE_URL
+    assert config.storage.url == paths().storage_url
     assert config.storage.raw_retention_days == 30
     assert config.storage.rollup_retention_days == 365
     assert config.agent.interval_s == 10

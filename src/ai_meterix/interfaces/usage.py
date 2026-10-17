@@ -1,4 +1,4 @@
-"""The usage statement as a table or CSV (PLAN.md Phase 3 step 5).
+"""The usage statement as a table or CSV.
 
 Columns follow provider usage pages: requests, input, output, cache read,
 cache write and total tokens per model, then energy and cost. Energy is shown

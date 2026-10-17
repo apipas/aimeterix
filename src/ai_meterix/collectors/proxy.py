@@ -1,4 +1,4 @@
-"""The LLM proxy (PLAN.md Phase 2 step 2, records 0011, 0014 and 0017).
+"""The LLM proxy (records 0011, 0014 and 0017).
 
 Apps point their SDK's base URL at the proxy and it forwards every request,
 streaming included, to the provider unchanged. On the way back it reads the
@@ -22,7 +22,7 @@ open relay.
 
 Calls are written through ``StorageWriter`` by a background thread about once
 a second. When the database is down they stay in memory, with a copy in
-``~/.aimeterix/proxy-buffer.jsonl``, and are written once it is back.
+``proxy-buffer.jsonl`` in the data folder, and are written once it is back.
 """
 
 from __future__ import annotations
@@ -34,6 +34,8 @@ import http.client
 import ipaddress
 import json
 import logging
+import select
+import socketserver
 import ssl
 import threading
 import time
@@ -47,11 +49,12 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from ai_meterix.core.model import Caller, CallType, LlmCall
+from ai_meterix.core.paths import paths
 from ai_meterix.core.timeutil import utc_now
 from ai_meterix.pricing.prices import ensure_price_row
 from ai_meterix.storage.base import StorageWriter
 
-from .agent import DATA_DIR, from_record, to_record
+from .agent import from_record, to_record
 from .usage import Usage, extract_usage
 
 log = logging.getLogger("ai_meterix.proxy")
@@ -228,13 +231,13 @@ class Recorder:
         self,
         open_storage: Callable[[], StorageWriter],
         *,
-        data_dir: Path = DATA_DIR,
+        data_dir: Path | None = None,
         flush_s: float = 1.0,
         max_pending: int = 100_000,
     ) -> None:
         self._open_storage = open_storage
         self._storage: StorageWriter | None = None
-        self.data_dir = data_dir.expanduser()
+        self.data_dir = (data_dir or paths().data_dir).expanduser()
         self.flush_s = flush_s
         self.max_pending = max_pending
         self._lock = threading.Lock()
@@ -406,9 +409,24 @@ class _Capture:
         return bytes(self.head) if not self.tail else bytes(self.head) + b"\n" + bytes(self.tail)
 
 
-class ProxyServer(ThreadingHTTPServer):
+class LoopbackHTTPServer(ThreadingHTTPServer):
+    """An HTTP server that starts listening at once.
+
+    ``HTTPServer.server_bind`` looks up the host's full name before it listens;
+    on some Macs that reverse DNS lookup takes seconds. On 127.0.0.1 the name
+    is not needed.
+    """
+
     daemon_threads = True
 
+    def server_bind(self) -> None:
+        socketserver.TCPServer.server_bind(self)
+        host, port = self.server_address[:2]
+        self.server_name = str(host)
+        self.server_port = int(port)
+
+
+class ProxyServer(LoopbackHTTPServer):
     def __init__(
         self,
         address: tuple[str, int],
@@ -502,18 +520,16 @@ class Upstreams:
         key = (scheme, host, port)
         target = (parts.path or "/") + (f"?{parts.query}" if parts.query else "")
         for attempt in (1, 2):
-            with self._lock:
-                idle = self._idle.get(key)
-                conn = idle.pop() if idle else None
+            conn = self._idle_conn(key) if attempt == 1 else None
             reused = conn is not None
             if conn is None:
                 conn = self._new(scheme, host, port)
             try:
                 conn.request(method, target, body=body, headers=dict(headers))
                 response = conn.getresponse()
-            except (http.client.RemoteDisconnected, ConnectionResetError, BrokenPipeError):
+            except (http.client.BadStatusLine, OSError) as exc:
                 conn.close()
-                if reused and attempt == 1:
+                if reused and attempt == 1 and not isinstance(exc, TimeoutError):
                     continue  # the provider closed an idle connection; try a fresh one
                 raise
             except Exception:
@@ -522,12 +538,28 @@ class Upstreams:
             return response, functools.partial(self._done, key, conn, response)
         raise AssertionError("unreachable")
 
+    def _idle_conn(self, key: tuple[str, str, int]) -> http.client.HTTPConnection | None:
+        """An idle connection the provider has not closed yet, if there is one."""
+        while True:
+            with self._lock:
+                idle = self._idle.get(key)
+                conn = idle.pop() if idle else None
+            if conn is None:
+                return None
+            sock = conn.sock
+            # An idle socket with something to read has been closed by the provider.
+            if sock is not None and not select.select([sock], [], [], 0)[0]:
+                return conn
+            conn.close()
+
     def _done(
         self,
         key: tuple[str, str, int],
         conn: http.client.HTTPConnection,
         response: http.client.HTTPResponse,
     ) -> None:
+        if response.length == 0:
+            response.close()  # fully read; Python 3.10's read1 leaves it open at the end
         if response.will_close or not response.isclosed():
             conn.close()
             return

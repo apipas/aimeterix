@@ -6,7 +6,7 @@
 - A reader opens the file with ``mode=ro`` and cannot change it.
 
 URLs: ``sqlite:///relative/path.db``, ``sqlite:////absolute/path.db``,
-``sqlite:///~/.aimeterix/meter.db`` and ``sqlite:///:memory:``.
+``sqlite:///~/data/meter.db`` and ``sqlite:///:memory:``.
 """
 
 from __future__ import annotations

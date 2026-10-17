@@ -1,0 +1,36 @@
+# AI Meterix configuration. Safe to commit: keep secrets out of this file.
+# Any value can be overridden with an environment variable named
+# AIMETERIX_<SECTION>_<FIELD>, e.g. AIMETERIX_STORAGE_URL.
+#
+# `aimeterix init` reads this file once to create the database. After that the
+# database wins: change live settings with `aimeterix config set KEY VALUE` and
+# providers with `aimeterix providers`.
+
+storage:
+  # sqlite (default), postgresql or duckdb. Without a url, SQLite in the data
+  # folder (`aimeterix paths` shows it). For a database with a password, set
+  # AIMETERIX_STORAGE_URL in the environment or the .env file next to this one.
+  # url: sqlite:////path/to/meter.db
+  raw_retention_days: 30       # raw samples and calls
+  rollup_retention_days: 365   # hourly rollups
+  busy_timeout_ms: 5000        # SQLite wait when another process is writing
+
+agent:
+  interval_s: 10               # seconds between hardware samples, 1 to 300
+
+proxy:
+  host: 127.0.0.1              # this machine only
+  port: 8787
+  # Ten cloud providers are built in (OpenAI, Anthropic, Gemini, Mistral, Groq,
+  # Together, Fireworks, OpenRouter, DeepSeek, xAI); see `aimeterix providers`.
+  # Add your own here as route name -> base URL, or later with `providers add`.
+  upstreams: {}
+  # Calls without a provider name go here, e.g. a local llama.cpp or Ollama server.
+  # default_upstream: http://127.0.0.1:8081
+  # SHA-256 hashes of the API keys the proxy may forward (aimeterix proxy --hash-key).
+  # Empty means any key. Never put the keys themselves here.
+  allowed_key_hashes: []
+
+api:
+  host: 127.0.0.1              # the API and dashboard, this machine only
+  port: 8788

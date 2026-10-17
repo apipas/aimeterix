@@ -1,4 +1,4 @@
-"""Import data recorded by the earlier ``computemeter`` prototype (PLAN.md Phase 1 step 8).
+"""Import data recorded by the earlier ``computemeter`` prototype.
 
 The prototype stored two tables in SQLite: ``hw_samples`` (one row per device
 per interval, devices named ``cpu`` or ``gpu:<index>``, memory in MiB) and
