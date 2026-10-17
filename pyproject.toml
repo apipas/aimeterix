@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ai-meterix"
-version = "0.1.1"
+version = "0.1.2"
 description = "Know what your AI compute costs, what you waste, and what next month will cost."
 readme = "README.md"
 license = "Apache-2.0"
@@ -31,9 +31,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/apipas-com/aimeterix"
-Issues = "https://github.com/apipas-com/aimeterix/issues"
-Changelog = "https://github.com/apipas-com/aimeterix/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/apipas/aimeterix"
+Issues = "https://github.com/apipas/aimeterix/issues"
+Changelog = "https://github.com/apipas/aimeterix/blob/main/CHANGELOG.md"
 
 [project.scripts]
 aimeterix = "ai_meterix.interfaces.cli:main"
