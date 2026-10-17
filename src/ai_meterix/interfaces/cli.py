@@ -965,11 +965,22 @@ def _config(args: argparse.Namespace) -> int:
 
 
 def _start(args: argparse.Namespace) -> int:
-    from ai_meterix.core.config import load_config
+    from ai_meterix.core.config import config_file, load_config
     from ai_meterix.core.errors import ConfigError
 
     from .service import SERVICES, start
+    from .setup import write_starter
 
+    # The first start sets itself up with the defaults; `init` is only for
+    # choosing settings before that. The processes create the database.
+    path = config_file(args.config)
+    first = not path.is_file()
+    if first:
+        try:
+            write_starter(path)
+        except OSError as exc:
+            print(f"aimeterix start: cannot write {path}: {exc}", file=sys.stderr)
+            return 1
     try:
         config = load_config(args.config)
     except ConfigError as exc:
@@ -980,10 +991,15 @@ def _start(args: argparse.Namespace) -> int:
     for name, started, message in start(names, config=args.config):
         print(f"{name:<6} {message}")
         ok = ok and started
-    if ok:
-        print(f"API and dashboard: http://{config.api.host}:{config.api.port}/api")
-        print(f"point apps at the proxy: http://{config.proxy.host}:{config.proxy.port}")
-        print("check with `aimeterix health`; stop with `aimeterix stop`")
+    api, proxy = config.api, config.proxy
+    print(f"Dashboard: http://{api.host}:{api.port}/  (log in as user, password user)")
+    print(f"Manual:    http://{api.host}:{api.port}/#help")
+    print(f"Proxy for your apps: http://{proxy.host}:{proxy.port}  (`aimeterix providers`)")
+    if first:
+        print(f"First start: the default settings are in {path}.")
+        print("Change ports or the database there, then `aimeterix stop` and `aimeterix start`;")
+        print("everything else with `aimeterix config`.")
+    print("Check with `aimeterix health`; stop with `aimeterix stop`.")
     return 0 if ok else 1
 
 
@@ -1216,7 +1232,7 @@ def build_parser() -> argparse.ArgumentParser:
     providers.set_defaults(func=_providers)
 
     init = commands.add_parser(
-        "init", help="first run: write the config file, then create the database"
+        "init", help="optional, before the first start: review and change the default settings"
     )
     init.add_argument("--yes", action="store_true", help="do not ask for confirmation")
     init.add_argument("--config", help="path to aimeterix.yaml (default: in the config folder)")

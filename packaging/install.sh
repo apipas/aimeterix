@@ -5,9 +5,14 @@
 # From an unpacked release:   ./install.sh
 # From the internet:          curl -fsSL <release>/install.sh | sh
 #
+# It downloads the release for this Mac's processor from GitHub, checks its
+# SHA-256, installs it, adds the command to PATH and starts AI Meterix.
+#
 # AIMETERIX_VERSION picks a release (default: the latest),
 # AIMETERIX_PREFIX the place (default: ~/.local; the program goes to
 # <prefix>/lib/ai-meterix and the command to <prefix>/bin/aimeterix).
+# AIMETERIX_NO_START=1 only installs; AIMETERIX_NO_MODIFY_PATH=1 leaves the
+# shell profile alone.
 set -eu
 
 REPO="mabuthraa/gocompute"
@@ -62,6 +67,10 @@ fi
 
 dest="$PREFIX/lib/ai-meterix"
 mkdir -p "$PREFIX/lib" "$PREFIX/bin"
+# An upgrade: stop the running copy first, so the new one is what starts.
+if [ -x "$dest/bin/aimeterix" ]; then
+  "$dest/bin/aimeterix" stop > /dev/null 2>&1 || true
+fi
 rm -rf "$dest.new"
 cp -R "$src" "$dest.new"
 rm -f "$dest.new/install.sh"
@@ -71,20 +80,41 @@ mv "$dest.new" "$dest"
 ln -sf "$dest/bin/aimeterix" "$PREFIX/bin/aimeterix"
 
 echo "Installed $("$dest/bin/aimeterix" --version) in $dest"
+
+# The command's folder on PATH, for new terminals, like other installers do.
 case ":$PATH:" in
-  *":$PREFIX/bin:"*) ;;
-  *) echo "Add $PREFIX/bin to your PATH, e.g. in ~/.zshrc or ~/.bashrc:"
-     echo "  export PATH=\"$PREFIX/bin:\$PATH\"" ;;
+  *":$PREFIX/bin:"*) on_path=yes ;;
+  *) on_path=no ;;
 esac
+if [ "$on_path" = no ] && [ "${AIMETERIX_NO_MODIFY_PATH:-}" != 1 ]; then
+  case $(basename "${SHELL:-sh}") in
+    zsh) profile="$HOME/.zshrc" ;;
+    bash) if [ "$os" = macos ]; then profile="$HOME/.bash_profile"; else profile="$HOME/.bashrc"; fi ;;
+    *) profile="$HOME/.profile" ;;
+  esac
+  line="export PATH=\"$PREFIX/bin:\$PATH\"  # AI Meterix"
+  if ! grep -qsF "$line" "$profile"; then
+    printf '\n%s\n' "$line" >> "$profile"
+    echo "Added $PREFIX/bin to PATH in $profile (new terminals have it)."
+  fi
+elif [ "$on_path" = no ]; then
+  echo "Add $PREFIX/bin to your PATH:  export PATH=\"$PREFIX/bin:\$PATH\""
+fi
+
+if [ "${AIMETERIX_NO_START:-}" != 1 ]; then
+  echo
+  "$dest/bin/aimeterix" start ||
+    echo "Something did not start; aimeterix health and aimeterix doctor say why."
+fi
+
 cat << 'EOF'
 
-Next:
-  1. aimeterix init     shows the default settings, lets you change any, creates the database
-  2. aimeterix start    runs the agent, proxy and dashboard in the background
-  3. aimeterix health   checks that everything is measuring
+Commands (in a new terminal):
+  aimeterix start      start again, e.g. after a restart of the Mac
+  aimeterix health     check that everything is measuring
+  aimeterix stop       stop everything
+  aimeterix --help     every command
 
-Dashboard   http://127.0.0.1:8788/        log in as user (or admin); the first password is the name
-Manual      http://127.0.0.1:8788/#help   or: aimeterix --help, aimeterix paths
 Online      https://github.com/mabuthraa/gocompute
 Remove      aimeterix uninstall --purge
 EOF

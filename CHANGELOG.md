@@ -4,8 +4,8 @@
 
 First preview: metering, costs and a dashboard on one machine.
 
-- **macOS installer** with its own Python, for Apple Silicon and Intel (`.pkg`, or `.tar.gz` with `install.sh` and no admin password). It shows the default settings before installing, and the commands, dashboard address and manual when done. Not signed yet. The Python package works on Linux too.
-- **Setup:** `aimeterix init` writes the config file with the default settings, shows them, lets you change any, then creates the database after you confirm. `aimeterix start`, `stop` and `health` run and check the agent, proxy and API; `aimeterix uninstall --purge` removes the data.
+- **Install in one line** on macOS, Apple Silicon or Intel, without an admin password: `install.sh` downloads the release for your processor from GitHub, checks its SHA-256, installs it with its own Python and starts it. A `.pkg` installer (not signed yet) and building from source work too. The Python package works on Linux too.
+- **Setup:** the first `aimeterix start` sets itself up with the default settings. `aimeterix init` is optional: it shows the defaults and lets you change any before the first start. `aimeterix start`, `stop` and `health` run and check the agent, proxy and API; `aimeterix uninstall --purge` removes the data.
 - **Files in standard places:** the config, database and logs live in the usual folders for macOS (`~/Library/Application Support/aimeterix`, `~/Library/Logs/aimeterix`) and Linux (XDG), the same from any folder; `aimeterix paths` shows them and `AIMETERIX_HOME` puts them in one folder.
 - **Hardware (Apple Silicon):** CPU, GPU, memory, power and energy, split by process and by local model (llama.cpp, Ollama). `aimeterix doctor` shows what the machine can measure.
 - **LLM calls:** a local proxy records the model and token counts (input, output, cache read and write) of every call, streaming included. Ten cloud providers built in: OpenAI, Anthropic, Google Gemini, Mistral, Groq, Together AI, Fireworks AI, OpenRouter, DeepSeek and xAI; add any other with `aimeterix providers add`.
