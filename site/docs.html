@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Docs · AI Meterix</title>
+<meta name="description" content="How AI Meterix collects data, where it is stored, and every command.">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%234ade80'/%3E%3Ctext x='16' y='22' font-size='16' font-family='monospace' font-weight='700' text-anchor='middle' fill='%2304110a'%3EAM%3C/text%3E%3C/svg%3E">
+</head>
+<body>
+<header class="top"><div class="wrap">
+<a class="logo" href="index.html"><span class="mark">AM</span>AI Meterix</a>
+<button class="menu-btn" type="button" aria-label="Menu">Menu</button>
+<nav class="menu"><a href="index.html">Home</a><a href="install.html">Install</a><a href="docs.html" aria-current="page">Docs</a><a href="releases.html">Releases</a><a href="about.html">About</a><a href="https://github.com/apipas-com/aimeterix">GitHub ↗</a></nav>
+</div></header>
+<main>
+
+<section class="page-head"><div class="wrap">
+<h1>Docs</h1>
+<p>How it works, where your data lives, and every command. The full manual is also built into the dashboard at <a href="http://127.0.0.1:8788/#help">127.0.0.1:8788/#help</a>.</p>
+</div></section>
+
+<section class="section"><div class="wrap">
+<h2>🧭 How it works</h2>
+<div class="grid">
+<div class="card"><div class="ico">🔀</div><h3>proxy</h3><p>Your apps send their AI calls here. It forwards each call unchanged and notes the model and token counts.</p></div>
+<div class="card"><div class="ico">⚡</div><h3>agent</h3><p>Every 10 seconds it reads the chip's power and which apps use it, so a local model's energy is measured.</p></div>
+<div class="card"><div class="ico">📈</div><h3>dashboard</h3><p>Turns the counts into costs with your prices and electricity rate.</p></div>
+</div>
+<h3 style="margin-top:32px">Supported providers</h3>
+<p class="sub">OpenAI, Anthropic, Google Gemini, Mistral, Groq, Together AI, Fireworks AI, OpenRouter, DeepSeek and xAI, plus local llama.cpp and Ollama. Add any other with <code>aimeterix providers add</code>.</p>
+</div></section>
+
+<section class="section"><div class="wrap">
+<h2>💾 Where your data lives</h2>
+<div class="scroll"><table>
+<tr><th>What</th><th>Where</th></tr>
+<tr><td>Database</td><td><code>~/Library/Application Support/aimeterix/meter.db</code><br><span style="color:var(--muted)">SQLite by default; PostgreSQL and DuckDB work too</span></td></tr>
+<tr><td>Settings</td><td><code>~/Library/Application Support/aimeterix/aimeterix.yaml</code></td></tr>
+<tr><td>Logs</td><td><code>~/Library/Logs/aimeterix</code></td></tr>
+</table></div>
+<ul class="ticks" style="margin-top:20px">
+<li><b>Kept:</b> model names, token counts, timings, energy</li>
+<li class="no"><b>Never kept:</b> prompts, answers, API keys</li>
+<li><b>Nothing leaves your Mac</b> except your own calls to the provider you chose</li>
+</ul>
+</div></section>
+
+<section class="section"><div class="wrap">
+<h2>🛠️ Commands</h2>
+<h3 style="margin-top:32px">Run</h3><p class="sub" style="margin:12px 0 0">Start everything in the background</p><div class="term"><div class="bar"><i></i><i></i><i></i></div><pre><span class="p">$ </span>aimeterix start</pre></div><p class="sub" style="margin:12px 0 0">Stop everything</p><div class="term"><div class="bar"><i></i><i></i><i></i></div><pre><span class="p">$ </span>aimeterix stop</pre></div><h3 style="margin-top:32px">Check</h3><p class="sub" style="margin:12px 0 0">Is everything running and measuring?</p><div class="term"><div class="bar"><i></i><i></i><i></i></div><pre><span class="p">$ </span>aimeterix health</pre></div><p class="sub" style="margin:12px 0 0">Today's usage and costs in Terminal</p><div class="term"><div class="bar"><i></i><i></i><i></i></div><pre><span class="p">$ </span>aimeterix usage</pre></div><p class="sub" style="margin:12px 0 0">What this Mac can measure</p><div class="term"><div class="bar"><i></i><i></i><i></i></div><pre><span class="p">$ </span>aimeterix doctor</pre></div><p class="sub" style="margin:12px 0 0">Where the data, settings and logs are</p><div class="term"><div class="bar"><i></i><i></i><i></i></div><pre><span class="p">$ </span>aimeterix paths</pre></div><h3 style="margin-top:32px">Costs and settings</h3><p class="sub" style="margin:12px 0 0">Your electricity price per kWh</p><div class="term"><div class="bar"><i></i><i></i><i></i></div><pre><span class="p">$ </span>aimeterix profile set --rate 0.30</pre></div><p class="sub" style="margin:12px 0 0">The AI providers and their proxy addresses</p><div class="term"><div class="bar"><i></i><i></i><i></i></div><pre><span class="p">$ </span>aimeterix providers</pre></div><p class="sub" style="margin:12px 0 0">Load public token prices</p><div class="term"><div class="bar"><i></i><i></i><i></i></div><pre><span class="p">$ </span>aimeterix prices apply-reference</pre></div><p class="sub" style="margin:12px 0 0">Change ports or database before the first start (optional)</p><div class="term"><div class="bar"><i></i><i></i><i></i></div><pre><span class="p">$ </span>aimeterix init</pre></div><h3 style="margin-top:32px">Remove</h3><p class="sub" style="margin:12px 0 0">Stop and delete all settings and data</p><div class="term"><div class="bar"><i></i><i></i><i></i></div><pre><span class="p">$ </span>aimeterix uninstall --purge</pre></div><h3 style="margin-top:32px">Help</h3><p class="sub" style="margin:12px 0 0">Every command and option</p><div class="term"><div class="bar"><i></i><i></i><i></i></div><pre><span class="p">$ </span>aimeterix --help</pre></div>
+</div></section>
+
+</main>
+<footer><div class="wrap">
+<div>© 2026 Apipas s.r.o., Prague, Czechia · IČO 03457567 · VAT CZ03457567<br>AI Meterix is open source under the Apache-2.0 license.</div>
+<div class="links"><a href="mailto:info@apipas.com">info@apipas.com</a><a href="privacy.html">Privacy</a><a href="https://github.com/apipas-com/aimeterix">GitHub</a><a href="https://github.com/apipas-com/aimeterix/blob/main/LICENSE">License</a></div>
+</div></footer>
+<script src="site.js"></script>
+</body>
+</html>

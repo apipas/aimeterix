@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Install · AI Meterix</title>
+<meta name="description" content="Install AI Meterix on macOS in one line, with a package, or from source.">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%234ade80'/%3E%3Ctext x='16' y='22' font-size='16' font-family='monospace' font-weight='700' text-anchor='middle' fill='%2304110a'%3EAM%3C/text%3E%3C/svg%3E">
+</head>
+<body>
+<header class="top"><div class="wrap">
+<a class="logo" href="index.html"><span class="mark">AM</span>AI Meterix</a>
+<button class="menu-btn" type="button" aria-label="Menu">Menu</button>
+<nav class="menu"><a href="index.html">Home</a><a href="install.html" aria-current="page">Install</a><a href="docs.html">Docs</a><a href="releases.html">Releases</a><a href="about.html">About</a><a href="https://github.com/apipas-com/aimeterix">GitHub ↗</a></nav>
+</div></header>
+<main>
+
+<section class="page-head"><div class="wrap">
+<h1>Install</h1>
+<p>macOS on Apple Silicon or Intel. Pick one way.</p>
+</div></section>
+
+<section class="section"><div class="wrap">
+<h2>🚀 One line <span class="tag">recommended</span></h2>
+<p class="sub">No admin password needed.</p>
+<div class="term"><div class="bar"><i></i><i></i><i></i></div><pre><span class="p">$ </span>curl -fsSL https://github.com/apipas-com/aimeterix/releases/latest/download/install.sh | sh</pre></div>
+<ul class="ticks">
+<li>Downloads the right build for your Mac from GitHub</li>
+<li>Checks its SHA-256</li>
+<li>Installs it in <code>~/.local</code> with its own Python</li>
+<li>Adds <code>aimeterix</code> to your PATH</li>
+<li>Starts AI Meterix and prints the dashboard address</li>
+</ul>
+</div></section>
+
+<section class="section"><div class="wrap">
+<h2>📦 Installer package</h2>
+<ol>
+<li>Download the <code>.pkg</code> for your Mac from the <a href="https://github.com/apipas-com/aimeterix/releases/latest">releases page</a>:
+<ul><li>Apple Silicon (M1 and later): <code>ai-meterix-&lt;version&gt;-macos-arm64.pkg</code></li>
+<li>Intel: <code>ai-meterix-&lt;version&gt;-macos-x86_64.pkg</code></li></ul></li>
+<li>Double-click it and follow the steps.</li>
+<li>Start AI Meterix in Terminal:</li>
+</ol>
+<div class="term"><div class="bar"><i></i><i></i><i></i></div><pre><span class="p">$ </span>aimeterix start</pre></div>
+<p class="sub">⚠️ The package is not signed yet. If macOS blocks it, open <b>System Settings &gt; Privacy &amp; Security</b> and choose <b>Open Anyway</b>.</p>
+</div></section>
+
+<section class="section"><div class="wrap">
+<h2>🛠️ From source</h2>
+<p class="sub">Needs <a href="https://docs.astral.sh/uv/">uv</a>.</p>
+<div class="term"><div class="bar"><i></i><i></i><i></i></div><pre><span class="p">$ </span>git clone https://github.com/apipas-com/aimeterix.git</pre></div>
+<div class="term"><div class="bar"><i></i><i></i><i></i></div><pre><span class="p">$ </span>cd aimeterix</pre></div>
+<div class="term"><div class="bar"><i></i><i></i><i></i></div><pre><span class="p">$ </span>uv run aimeterix start</pre></div>
+</div></section>
+
+<section class="section"><div class="wrap">
+<h2>▶️ Next steps</h2>
+<ol>
+<li>Open the dashboard at <a href="http://127.0.0.1:8788/">http://127.0.0.1:8788/</a>. Log in as <code>user</code>, password <code>user</code>; you choose a new password the first time.</li>
+<li>Set your electricity price per kWh:</li>
+</ol>
+<div class="term"><div class="bar"><i></i><i></i><i></i></div><pre><span class="p">$ </span>aimeterix profile set --rate 0.30</pre></div>
+<ol start="3">
+<li>Point your apps at the proxy, for example <code>http://127.0.0.1:8787/openai/v1</code>. To see the address for each provider:</li>
+</ol>
+<div class="term"><div class="bar"><i></i><i></i><i></i></div><pre><span class="p">$ </span>aimeterix providers</pre></div>
+<ol start="4"><li>Check that everything is measuring:</li></ol>
+<div class="term"><div class="bar"><i></i><i></i><i></i></div><pre><span class="p">$ </span>aimeterix health</pre></div>
+</div></section>
+
+</main>
+<footer><div class="wrap">
+<div>© 2026 Apipas s.r.o., Prague, Czechia · IČO 03457567 · VAT CZ03457567<br>AI Meterix is open source under the Apache-2.0 license.</div>
+<div class="links"><a href="mailto:info@apipas.com">info@apipas.com</a><a href="privacy.html">Privacy</a><a href="https://github.com/apipas-com/aimeterix">GitHub</a><a href="https://github.com/apipas-com/aimeterix/blob/main/LICENSE">License</a></div>
+</div></footer>
+<script src="site.js"></script>
+</body>
+</html>
