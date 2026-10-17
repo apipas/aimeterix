@@ -93,6 +93,5 @@ jobs:
           (cd dist && sha256sum ai-meterix* ai_meterix* install.sh > SHA256SUMS)
           awk -v v="## $version" 'index($0, v) == 1 {on = 1; next} /^## / {on = 0} on' \
             CHANGELOG.md > notes.md
-          case $version in 0.*) pre=--prerelease ;; *) pre= ;; esac
           gh release create "$GITHUB_REF_NAME" dist/* --title "AI Meterix $version" \
-            --notes-file notes.md $pre
+            --notes-file notes.md --latest
