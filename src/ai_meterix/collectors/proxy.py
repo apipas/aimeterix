@@ -34,6 +34,7 @@ import http.client
 import ipaddress
 import json
 import logging
+import select
 import socketserver
 import ssl
 import threading
@@ -519,18 +520,16 @@ class Upstreams:
         key = (scheme, host, port)
         target = (parts.path or "/") + (f"?{parts.query}" if parts.query else "")
         for attempt in (1, 2):
-            with self._lock:
-                idle = self._idle.get(key)
-                conn = idle.pop() if idle else None
+            conn = self._idle_conn(key) if attempt == 1 else None
             reused = conn is not None
             if conn is None:
                 conn = self._new(scheme, host, port)
             try:
                 conn.request(method, target, body=body, headers=dict(headers))
                 response = conn.getresponse()
-            except (http.client.RemoteDisconnected, ConnectionResetError, BrokenPipeError):
+            except (http.client.BadStatusLine, OSError) as exc:
                 conn.close()
-                if reused and attempt == 1:
+                if reused and attempt == 1 and not isinstance(exc, TimeoutError):
                     continue  # the provider closed an idle connection; try a fresh one
                 raise
             except Exception:
@@ -538,6 +537,20 @@ class Upstreams:
                 raise
             return response, functools.partial(self._done, key, conn, response)
         raise AssertionError("unreachable")
+
+    def _idle_conn(self, key: tuple[str, str, int]) -> http.client.HTTPConnection | None:
+        """An idle connection the provider has not closed yet, if there is one."""
+        while True:
+            with self._lock:
+                idle = self._idle.get(key)
+                conn = idle.pop() if idle else None
+            if conn is None:
+                return None
+            sock = conn.sock
+            # An idle socket with something to read has been closed by the provider.
+            if sock is not None and not select.select([sock], [], [], 0)[0]:
+                return conn
+            conn.close()
 
     def _done(
         self,
