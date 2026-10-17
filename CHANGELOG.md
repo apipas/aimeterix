@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.3 (preview)
+
+- **Dashboard Help:** commands and options sit on a soft gray instead of a dark box, in light and dark mode.
+
 ## 0.1.2 (preview)
 
 Preview: metering, costs and a dashboard on one machine.
