@@ -53,7 +53,8 @@ jobs:
           case ${{ matrix.kind }} in
             pkg) sudo installer -pkg "$file" -target / ;;
             tar) tar -xzf "$file" -C "$RUNNER_TEMP"
-                 sh "$RUNNER_TEMP/$(basename "$file" .tar.gz)/install.sh"
+                 # The script also starts it; the agent may not run on a CI Mac.
+                 AIMETERIX_NO_START=1 sh "$RUNNER_TEMP/$(basename "$file" .tar.gz)/install.sh"
                  echo "$HOME/.local/bin" >> "$GITHUB_PATH" ;;
           esac
       - name: Set up, run, check and remove, from an unrelated folder
@@ -62,9 +63,8 @@ jobs:
           set -x
           mkdir "$RUNNER_TEMP/work" && cd "$RUNNER_TEMP/work"
           aimeterix --version
-          aimeterix init --yes
+          aimeterix start proxy serve  # the first start sets up the defaults
           aimeterix paths
-          aimeterix start proxy serve
           sleep 3
           curl -fsS http://127.0.0.1:8788/ > /dev/null
           aimeterix stop
