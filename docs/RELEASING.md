@@ -4,14 +4,30 @@ A release is one tag. GitHub Actions (`.github/workflows/release.yml`) builds th
 
 ## Steps
 
-1. Make a branch `release/<version>` (e.g. `release/0.1.0`) from `main`.
-2. Set the version in `pyproject.toml` and `src/ai_meterix/__init__.py`, run `uv lock`, and add its section to `CHANGELOG.md` (`## 0.1.0 ...`; the release notes are taken from it).
-3. `make check` passes; commit and push the branch. Every push runs CI and builds and installs the packages on clean Macs, without publishing anything.
-4. When both are green, merge the branch into `main`, then tag and push: `git tag v0.1.0 && git push origin v0.1.0`. Only the tag publishes the GitHub Release; a tag that does not match the package version fails the first job.
+1. Update `main` first, then make a branch `release/<version>` (e.g. `release/0.1.3`) from it. Never reuse or merge an old branch: it can bring back commits that were already replaced.
+2. Set the version in `pyproject.toml`, `src/ai_meterix/__init__.py` and `uv.lock` (`uv lock`), and in the README's Versions list. Add its section at the top of `CHANGELOG.md` (`## 0.1.3 (preview)`); the release notes are taken from that section only.
+3. Website: update the version badge on `site/index.html` and the entry on `site/releases.html`.
+4. If the database schema changed, follow [Upgrades and the database](#upgrades-and-the-database) below.
+5. `make check` passes; commit and push the branch. Every push runs CI and builds and installs the packages on clean Macs, without publishing anything.
+6. When both are green, merge the branch into `main`. Tag the merge commit on `main` and push the tag (`git tag v0.1.3 && git push origin v0.1.3`, or Create Tag in GitHub Desktop). Only the tag publishes the GitHub Release; a tag that does not match the package version fails the first job. Never create the release by hand on GitHub: the workflow could not attach its files to it.
+7. Delete the merged branch.
 
 `uv.lock` is committed on purpose: CI and every developer install the same dependency versions.
 
 Every release is published as the latest release, so the one-line install (`releases/latest/download/install.sh`) finds it. A `0.x` version is still a preview.
+
+## Upgrades and the database
+
+Users upgrade by running the one-line install again, or the new `.pkg`. Their settings and data stay where they are (`aimeterix paths`); only the program is replaced. The first `aimeterix start` of the new version upgrades the database schema by itself (`migrate()` in `src/ai_meterix/storage/sqlstore.py`).
+
+Rules for a release that changes the schema:
+
+1. **Append, never edit.** Add the change as a new entry at the end of `MIGRATIONS`. Never change or remove an entry that has been released: users' databases already ran it.
+2. **Forward only and safe for existing rows.** New columns get a default or allow NULL; nothing is dropped or renamed in the same release that stops using it.
+3. **Test the upgrade.** Create a database with the previous release, then start the new one on it: the schema reaches the new version, `aimeterix health` is healthy, and old usage and costs read the same.
+4. **Back up first.** Before migrating, the user's database must be copied next to the original (for SQLite: `meter.db` to `meter.db.v<old>-<date>.bak`). AI Meterix does not make this copy by itself yet: build it before the first release that changes the schema. Say in `CHANGELOG.md` that the release upgrades the database and where the backup is.
+5. **Major versions** (`1.x` to `2.x`) may also change settings or file locations: describe each step the user must take in the CHANGELOG and in the release notes.
+6. An older AI Meterix refuses a database newer than itself (it says so and stops), so downgrading means restoring the backup.
 
 ## What a release contains
 
